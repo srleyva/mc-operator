@@ -41,9 +41,9 @@ type WorldReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=minecraft.sleyva.com,resources=worlds,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=minecraft.sleyva.com,resources=worlds/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=minecraft.sleyva.com,resources=worlds/finalizers,verbs=update
+// +kubebuilder:rbac:groups=minecraft.sleyva.io,resources=worlds,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=minecraft.sleyva.io,resources=worlds/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=minecraft.sleyva.io,resources=worlds/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -106,7 +106,7 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Image: fmt.Sprintf("quay.io/sleyva/minecraft-server:%s-alpine", m.Spec.Version),
+						Image: fmt.Sprintf("sleyva97/minecraft-server:%s-alpine", m.Spec.Version),
 						Name:  "minecraft",
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 8080,
