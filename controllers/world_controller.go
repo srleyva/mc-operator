@@ -119,6 +119,115 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World) *ap
 	return dep
 }
 
+func configmapForMinecraft(m *minecraftv1alpha1.ServerProperties) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		Data: map[string]string{
+			"server.properties": fmt.Sprintf(`
+				#Minecraft server properties
+				enable-jmx-monitoring=%t
+				rcon.port=%d
+				level-seed=%s
+				gamemode=%s
+				enable-command-block=%t
+				enable-query=%t
+				generator-settings=%s
+				level-name=%s
+				motd=%s
+				query.port=%d
+				pvp=%t
+				generate-structures=%t
+				difficulty=%s
+				network-compression-threshold=%d
+				max-tick-time=%d
+				max-players=%d
+				use-native-transport=%t
+				online-mode=%t
+				enable-status=%t
+				allow-flight=%t
+				broadcast-rcon-to-ops=%t
+				view-distance=%d
+				max-build-height=%d
+				server-ip=%s
+				allow-nether=%t
+				server-port=%d
+				enable-rcon=%t
+				sync-chunk-writes=%t
+				op-permission-level=%d
+				prevent-proxy-connections=%t
+				resource-pack=%s
+				entity-broadcast-range-percentage=%d
+				rcon.password=%s
+				player-idle-timeout=%d
+				force-gamemode=%t
+				rate-limit=%d
+				hardcore=%t
+				white-list=%t
+				broadcast-console-to-ops=%t
+				spawn-npcs=%t
+				spawn-animals=%t
+				snooper-enabled=%t
+				function-permission-level=%d
+				level-type=%s
+				spawn-monsters=%t
+				enforce-whitelist=%t
+				resource-pack-sha1=%s
+				spawn-protection=%d
+				max-world-size=%d
+			`,
+				m.EnableJMXMonitoring,
+				m.RCONPort,
+				m.LevelSeed,
+				m.Gamemode,
+				m.EnableCommandBlock,
+				m.EnableQuery,
+				m.GeneratorSettings,
+				m.LevelType,
+				m.MOTD,
+				m.QueryPort,
+				m.PVP,
+				m.GenerateStructures,
+				m.Difficulty,
+				m.NetworkCompressionThreshold,
+				m.MaxTickTime,
+				m.MaxPlayers,
+				m.UseNativeTransport,
+				m.OnlineMode,
+				m.EnableStatus,
+				m.AllowFlight,
+				m.BroadcastRCONToOps,
+				m.ViewDistance,
+				m.MaxBuildHeight,
+				m.ServerIP,
+				m.AllowNether,
+				m.ServerPort,
+				m.EnableRCON,
+				m.SyncChunkWrites,
+				m.OpPermissionLevel,
+				m.PreventProxyConnection,
+				m.ResourcePack,
+				m.EntityBroadcaseRangePercentage,
+				m.RCONPassword,
+				m.PlayerIdleTimeout,
+				m.ForceGamemode,
+				m.RateLimit,
+				m.Hardcore,
+				m.WhiteList,
+				m.BroadcastConsoleToOps,
+				m.SpawnNPCS,
+				m.SpawnAnimals,
+				m.SnooperEnabled,
+				m.FunctionPermissionLevel,
+				m.LevelType,
+				m.SpawnMonster,
+				m.EnforceWhitelist,
+				m.ResourcePackSha1,
+				m.SpawnProtection,
+				m.MaxWorldSize,
+			),
+		},
+	}
+}
+
 func defaultForSpec(m *minecraftv1alpha1.WorldSpec) {
 	if m.Version == "" {
 		m.Version = "1.16"

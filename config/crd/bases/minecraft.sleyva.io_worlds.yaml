@@ -43,74 +43,116 @@ spec:
                 properties:
                   allowFlight:
                     type: boolean
+                    default: false
                   allowNether:
                     type: boolean
+                    default: true
                   broadcaseRCONToOps:
                     type: boolean
+                    default: true
                   broadcastConsoleToOps:
                     type: boolean
+                    default: true
                   difficulty:
                     type: string
+                    default: "easy"
+                    pattern: '(peaceful|easy|normal|hard)'
                   enableCommandBlock:
                     type: boolean
+                    default: false
                   enableJMXMonitoring:
                     type: boolean
+                    default: false
                   enableQuery:
                     type: boolean
+                    default: false
                   enableRCON:
                     type: boolean
+                    default: false
                   enableStatus:
                     type: boolean
+                    default: true
                   enforceWhitelist:
                     type: boolean
+                    default: true
                   entityBroadcastPercentage:
-                    type: string
+                    type: integer
+                    default: 100
+                  forceGamemode:
+                    type: boolean
+                    default: false
                   functionPermissionLevel:
                     type: integer
+                    default: 2
                   gamemode:
                     type: string
+                    default: "survival"
+                    pattern: '(survival|creative|adventure)'
                   generateStructure:
                     type: boolean
+                    default: true
                   generatorSettings:
                     type: string
                   hardcore:
                     type: boolean
+                    default: false
                   levelName:
                     type: string
+                    default: "world"
                   levelSeed:
                     type: string
                   levelType:
-                    type: integer
+                    type: string
+                    default: "default"
+                    pattern: '(default|flat|largeBiomes|amplified|buffet|default_1_1|customized)'
                   maxBuildHeight:
                     type: integer
+                    default: 256
+                    minimum: 1
                   maxPlayers:
                     type: integer
+                    default: 20
+                    minimum: 1
                   maxTickTime:
                     type: integer
+                    default: 60000
                   maxWorldSize:
                     type: integer
+                    default: 29999984
                   motd:
                     type: string
+                    default: "A Minecraft Server"
                   networkCompressionThreshold:
                     type: integer
+                    default: 256
                   onlineMode:
                     type: boolean
+                    default: true
                   opPermissionLevel:
                     type: integer
+                    default: 4
+                    minimum: 1
+                    maximum: 4
                   playerIdleTimeout:
                     type: integer
+                    default: 0
                   preventProxyConnections:
                     type: boolean
+                    default: false
                   pvp:
                     type: boolean
+                    default: true
                   queryPort:
                     type: integer
+                    default: 25565
                   rateLimit:
                     type: integer
+                    default: 0
                   rconPassword:
                     type: string
                   rconPort:
                     type: integer
+                    default: 25575
                   resourcePack:
                     type: string
                   resourcePackSha1:
@@ -119,24 +161,36 @@ spec:
                     type: string
                   serverPort:
                     type: integer
+                    default: 25565
                   snooperEnabled:
                     type: boolean
+                    default: false
                   spawnAnimals:
                     type: boolean
+                    default: true
                   spawnMonster:
                     type: boolean
+                    default: true
                   spawnNPCS:
                     type: boolean
+                    default: true
                   spawnProtection:
                     type: integer
+                    default: 16
                   syncChunkWrites:
                     type: boolean
+                    default: true
                   useNativeTransport:
                     type: boolean
+                    default: true
                   viewDistance:
                     type: integer
+                    default: 10
+                    minimum: 3
+                    maximum: 32
                   whiteList:
                     type: boolean
+                    default: true
                 type: object
               size:
                 format: int32

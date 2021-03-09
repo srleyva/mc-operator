@@ -61,9 +61,10 @@ type ServerProperties struct {
 	OpPermissionLevel              int    `json:"opPermissionLevel,omitempty"`
 	PreventProxyConnection         bool   `json:"preventProxyConnections,omitempty"`
 	ResourcePack                   string `json:"resourcePack,omitempty"`
-	EntityBroadcaseRangePercentage string `json:"entityBroadcastPercentage,omitempty"`
+	EntityBroadcaseRangePercentage int    `json:"entityBroadcastPercentage,omitempty"`
 	RCONPassword                   string `json:"rconPassword,omitempty"`
 	PlayerIdleTimeout              int    `json:"playerIdleTimeout,omitempty"`
+	ForceGamemode                  bool   `json:"forceGamemode,omitempty"`
 	RateLimit                      int    `json:"rateLimit,omitempty"`
 	Hardcore                       bool   `json:"hardcore,omitempty"`
 	WhiteList                      bool   `json:"whiteList,omitempty"`
@@ -72,7 +73,7 @@ type ServerProperties struct {
 	SpawnAnimals                   bool   `json:"spawnAnimals,omitempty"`
 	SnooperEnabled                 bool   `json:"snooperEnabled,omitempty"`
 	FunctionPermissionLevel        int    `json:"functionPermissionLevel,omitempty"`
-	LevelType                      int    `json:"levelType,omitempty"`
+	LevelType                      string `json:"levelType,omitempty"`
 	SpawnMonster                   bool   `json:"spawnMonster,omitempty"`
 	EnforceWhitelist               bool   `json:"enforceWhitelist,omitempty"`
 	ResourcePackSha1               string `json:"resourcePackSha1,omitempty"`
