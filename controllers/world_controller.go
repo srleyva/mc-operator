@@ -62,14 +62,17 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// your logic here
 	found := &appsv1.Deployment{}
 	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, found); err != nil {
 		if errors.IsNotFound(err) {
-			dep := r.deploymentForMinecraft(world)
+			configmap := r.configmapForMinecraft(world)
+			if err := r.Create(ctx, configmap); err != nil {
+				log.Error(err, "Failed to create new configmap", "Configmap.Namespace", configmap.Namespace, "Configmap.Name", configmap.Name)
+				return ctrl.Result{}, err
+			}
+			dep := r.deploymentForMinecraft(world, configmap)
 			log.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
-			err = r.Create(ctx, dep)
-			if err != nil {
+			if err := r.Create(ctx, dep); err != nil {
 				log.Error(err, "Failed to create new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
 				return ctrl.Result{}, err
 			}
@@ -83,7 +86,7 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 }
 
 // deploymentForMemcached returns a memcached Deployment object
-func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World) *appsv1.Deployment {
+func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, configmap *corev1.ConfigMap) *appsv1.Deployment {
 	ls := labelsForMinecraft(m.Name)
 	replicas := m.Spec.Size
 
@@ -109,7 +112,26 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World) *ap
 							ContainerPort: 8080,
 							Name:          "minecraft",
 						}},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      "server-properties",
+								MountPath: "/game/server.properties",
+								SubPath:   "server.properties",
+							},
+						},
 					}},
+					Volumes: []corev1.Volume{
+						{
+							Name: "server-properties",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: configmap.Name,
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		},
@@ -119,8 +141,13 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World) *ap
 	return dep
 }
 
-func configmapForMinecraft(m *minecraftv1alpha1.ServerProperties) *corev1.ConfigMap {
+func (r *WorldReconciler) configmapForMinecraft(world *minecraftv1alpha1.World) *corev1.ConfigMap {
+	m := world.Spec.ServerProperties
 	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      world.Name,
+			Namespace: world.Namespace,
+		},
 		Data: map[string]string{
 			"server.properties": fmt.Sprintf(`
 				#Minecraft server properties
@@ -225,12 +252,6 @@ func configmapForMinecraft(m *minecraftv1alpha1.ServerProperties) *corev1.Config
 				m.MaxWorldSize,
 			),
 		},
-	}
-}
-
-func defaultForSpec(m *minecraftv1alpha1.WorldSpec) {
-	if m.Version == "" {
-		m.Version = "1.16"
 	}
 }
 

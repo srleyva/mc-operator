@@ -197,11 +197,11 @@ spec:
                 type: integer
               version:
                 type: string
+                default: "1.16"
             required:
             - name
             - serverProperties
             - size
-            - version
             type: object
           status:
             description: WorldStatus defines the observed state of World
