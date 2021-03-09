@@ -67,6 +67,12 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		if errors.IsNotFound(err) {
 			configmap := r.configmapForMinecraft(world)
 			if err := r.Create(ctx, configmap); err != nil {
+				if errors.IsAlreadyExists(err) {
+					if err := r.Update(ctx, configmap, &client.UpdateOptions{}); err != nil {
+						log.Error(err, "Failed to update configmap", "Configmap.Namespace", configmap.Namespace, "Configmap.Name", configmap.Name)
+					}
+
+				}
 				log.Error(err, "Failed to create new configmap", "Configmap.Namespace", configmap.Namespace, "Configmap.Name", configmap.Name)
 				return ctrl.Result{}, err
 			}
@@ -150,56 +156,56 @@ func (r *WorldReconciler) configmapForMinecraft(world *minecraftv1alpha1.World) 
 		},
 		Data: map[string]string{
 			"server.properties": fmt.Sprintf(`
-				#Minecraft server properties
-				enable-jmx-monitoring=%t
-				rcon.port=%d
-				level-seed=%s
-				gamemode=%s
-				enable-command-block=%t
-				enable-query=%t
-				generator-settings=%s
-				level-name=%s
-				motd=%s
-				query.port=%d
-				pvp=%t
-				generate-structures=%t
-				difficulty=%s
-				network-compression-threshold=%d
-				max-tick-time=%d
-				max-players=%d
-				use-native-transport=%t
-				online-mode=%t
-				enable-status=%t
-				allow-flight=%t
-				broadcast-rcon-to-ops=%t
-				view-distance=%d
-				max-build-height=%d
-				server-ip=%s
-				allow-nether=%t
-				server-port=%d
-				enable-rcon=%t
-				sync-chunk-writes=%t
-				op-permission-level=%d
-				prevent-proxy-connections=%t
-				resource-pack=%s
-				entity-broadcast-range-percentage=%d
-				rcon.password=%s
-				player-idle-timeout=%d
-				force-gamemode=%t
-				rate-limit=%d
-				hardcore=%t
-				white-list=%t
-				broadcast-console-to-ops=%t
-				spawn-npcs=%t
-				spawn-animals=%t
-				snooper-enabled=%t
-				function-permission-level=%d
-				level-type=%s
-				spawn-monsters=%t
-				enforce-whitelist=%t
-				resource-pack-sha1=%s
-				spawn-protection=%d
-				max-world-size=%d
+#Minecraft server properties
+enable-jmx-monitoring=%t
+rcon.port=%d
+level-seed=%s
+gamemode=%s
+enable-command-block=%t
+enable-query=%t
+generator-settings=%s
+level-name=%s
+motd=%s
+query.port=%d
+pvp=%t
+generate-structures=%t
+difficulty=%s
+network-compression-threshold=%d
+max-tick-time=%d
+max-players=%d
+use-native-transport=%t
+online-mode=%t
+enable-status=%t
+allow-flight=%t
+broadcast-rcon-to-ops=%t
+view-distance=%d
+max-build-height=%d
+server-ip=%s
+allow-nether=%t
+server-port=%d
+enable-rcon=%t
+sync-chunk-writes=%t
+op-permission-level=%d
+prevent-proxy-connections=%t
+resource-pack=%s
+entity-broadcast-range-percentage=%d
+rcon.password=%s
+player-idle-timeout=%d
+force-gamemode=%t
+rate-limit=%d
+hardcore=%t
+white-list=%t
+broadcast-console-to-ops=%t
+spawn-npcs=%t
+spawn-animals=%t
+snooper-enabled=%t
+function-permission-level=%d
+level-type=%s
+spawn-monsters=%t
+enforce-whitelist=%t
+resource-pack-sha1=%s
+spawn-protection=%d
+max-world-size=%d
 			`,
 				m.EnableJMXMonitoring,
 				m.RCONPort,

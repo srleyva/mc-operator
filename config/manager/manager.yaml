@@ -24,14 +24,13 @@ spec:
     spec:
       securityContext:
         runAsUser: 65532
-      imagePullSecrets:
-      - name: sleyva
       containers:
       - command:
         - /manager
         args:
         - --leader-elect
         image: controller:latest
+        imagePullPolicy: Always
         name: manager
         securityContext:
           allowPrivilegeEscalation: false
