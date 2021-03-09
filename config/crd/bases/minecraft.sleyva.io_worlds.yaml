@@ -1,0 +1,170 @@
+
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.4.1
+  creationTimestamp: null
+  name: worlds.minecraft.sleyva.io
+spec:
+  group: minecraft.sleyva.io
+  names:
+    kind: World
+    listKind: WorldList
+    plural: worlds
+    singular: world
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: World is the Schema for the worlds API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: WorldSpec defines the desired state of World
+            properties:
+              name:
+                type: string
+              serverProperties:
+                description: ServerProperties is the actual server properties
+                properties:
+                  allowFlight:
+                    type: boolean
+                  allowNether:
+                    type: boolean
+                  broadcaseRCONToOps:
+                    type: boolean
+                  broadcastConsoleToOps:
+                    type: boolean
+                  difficulty:
+                    type: string
+                  enableCommandBlock:
+                    type: boolean
+                  enableJMXMonitoring:
+                    type: boolean
+                  enableQuery:
+                    type: boolean
+                  enableRCON:
+                    type: boolean
+                  enableStatus:
+                    type: boolean
+                  enforceWhitelist:
+                    type: boolean
+                  entityBroadcastPercentage:
+                    type: string
+                  functionPermissionLevel:
+                    type: integer
+                  gamemode:
+                    type: string
+                  generateStructure:
+                    type: boolean
+                  generatorSettings:
+                    type: string
+                  hardcore:
+                    type: boolean
+                  levelName:
+                    type: string
+                  levelSeed:
+                    type: string
+                  levelType:
+                    type: integer
+                  maxBuildHeight:
+                    type: integer
+                  maxPlayers:
+                    type: integer
+                  maxTickTime:
+                    type: integer
+                  maxWorldSize:
+                    type: integer
+                  motd:
+                    type: string
+                  networkCompressionThreshold:
+                    type: integer
+                  onlineMode:
+                    type: boolean
+                  opPermissionLevel:
+                    type: integer
+                  playerIdleTimeout:
+                    type: integer
+                  preventProxyConnections:
+                    type: boolean
+                  pvp:
+                    type: boolean
+                  queryPort:
+                    type: integer
+                  rateLimit:
+                    type: integer
+                  rconPassword:
+                    type: string
+                  rconPort:
+                    type: integer
+                  resourcePack:
+                    type: string
+                  resourcePackSha1:
+                    type: string
+                  serverIP:
+                    type: string
+                  serverPort:
+                    type: integer
+                  snooperEnabled:
+                    type: boolean
+                  spawnAnimals:
+                    type: boolean
+                  spawnMonster:
+                    type: boolean
+                  spawnNPCS:
+                    type: boolean
+                  spawnProtection:
+                    type: integer
+                  syncChunkWrites:
+                    type: boolean
+                  useNativeTransport:
+                    type: boolean
+                  viewDistance:
+                    type: integer
+                  whiteList:
+                    type: boolean
+                type: object
+              size:
+                format: int32
+                type: integer
+              version:
+                type: string
+            required:
+            - name
+            - serverProperties
+            - size
+            - version
+            type: object
+          status:
+            description: WorldStatus defines the observed state of World
+            properties:
+              ready:
+                type: boolean
+            required:
+            - ready
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

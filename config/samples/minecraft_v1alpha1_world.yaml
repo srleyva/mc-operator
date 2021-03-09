@@ -1,0 +1,10 @@
+apiVersion: minecraft.sleyva.io/v1alpha1
+kind: World
+metadata:
+  name: world-sample
+spec:
+  name: "test"
+  version: "1.16"
+  size: 3
+  serverProperties:
+    allowFlight: true
