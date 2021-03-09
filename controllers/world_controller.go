@@ -62,23 +62,32 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	found := &appsv1.Deployment{}
-	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, found); err != nil {
+	configmap := &corev1.ConfigMap{}
+	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, configmap); err != nil {
 		if errors.IsNotFound(err) {
-			configmap := r.configmapForMinecraft(world)
+			configmap = r.configmapForMinecraft(world)
+			log.Info("Creating new configmap")
 			if err := r.Create(ctx, configmap); err != nil {
 				if errors.IsAlreadyExists(err) {
-					if err := r.Update(ctx, configmap, &client.UpdateOptions{}); err != nil {
-						log.Error(err, "Failed to update configmap", "Configmap.Namespace", configmap.Namespace, "Configmap.Name", configmap.Name)
-					}
-
+					return ctrl.Result{Requeue: true}, nil
 				}
-				log.Error(err, "Failed to create new configmap", "Configmap.Namespace", configmap.Namespace, "Configmap.Name", configmap.Name)
+				log.Error(err, "Failed to create new Deployment", "Deployment.Namespace", configmap.Namespace, "Deployment.Name", configmap.Name)
 				return ctrl.Result{}, err
 			}
-			dep := r.deploymentForMinecraft(world, configmap)
+			return ctrl.Result{Requeue: true}, nil
+		}
+		return ctrl.Result{}, nil
+	}
+
+	dep := &appsv1.Deployment{}
+	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, dep); err != nil {
+		if errors.IsNotFound(err) {
+			dep = r.deploymentForMinecraft(world, configmap)
 			log.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
 			if err := r.Create(ctx, dep); err != nil {
+				if errors.IsAlreadyExists(err) {
+					return ctrl.Result{Requeue: true}, nil
+				}
 				log.Error(err, "Failed to create new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
 				return ctrl.Result{}, err
 			}
@@ -114,10 +123,16 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 					Containers: []corev1.Container{{
 						Image: fmt.Sprintf("sleyva97/minecraft-server:%s-alpine", m.Spec.Version),
 						Name:  "minecraft",
-						Ports: []corev1.ContainerPort{{
-							ContainerPort: 8080,
-							Name:          "minecraft",
-						}},
+						Ports: []corev1.ContainerPort{
+							{
+								ContainerPort: int32(m.Spec.ServerProperties.ServerPort),
+								Name:          "minecraft",
+							},
+							{
+								ContainerPort: int32(m.Spec.ServerProperties.RCONPort),
+								Name:          "rcon",
+							},
+						},
 						VolumeMounts: []corev1.VolumeMount{
 							{
 								Name:      "server-properties",

@@ -7,4 +7,7 @@ spec:
   version: "1.16"
   size: 3
   serverProperties:
-    allowFlight: true
+    enableRCON: true
+    rconPassword: "test"
+    rconPort: 8081
+    serverPort: 8080
