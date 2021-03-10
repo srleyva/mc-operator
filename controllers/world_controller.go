@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -97,7 +98,88 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
+	rconService := r.serviceForRCONMinecraft(world)
+	if err := r.Get(ctx, types.NamespacedName{Name: rconService.Name, Namespace: rconService.Namespace}, rconService); err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Creating a new Service", "Deployment.Namespace", rconService.Namespace, "Deployment.Name", rconService.Name)
+			if err := r.Create(ctx, rconService); err != nil {
+				if errors.IsAlreadyExists(err) {
+					return ctrl.Result{Requeue: true}, nil
+				}
+				log.Error(err, "Failed to create new Service", "Deployment.Namespace", rconService.Namespace, "Deployment.Name", rconService.Name)
+				return ctrl.Result{}, err
+			}
+			// Deployment created successfully - return and requeue
+			return ctrl.Result{Requeue: true}, nil
+		}
+		log.Error(err, "Failed to create new Service", "Deployment.Namespace", rconService.Namespace, "Deployment.Name", rconService.Name)
+		return ctrl.Result{}, err
+	}
+
+	service := r.serviceForMinecraft(world)
+	if err := r.Get(ctx, types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, service); err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Creating a new Service", "Deployment.Namespace", service.Namespace, "Deployment.Name", service.Name)
+			if err := r.Create(ctx, service); err != nil {
+				if errors.IsAlreadyExists(err) {
+					return ctrl.Result{Requeue: true}, nil
+				}
+				log.Error(err, "Failed to create new Service", "Deployment.Namespace", service.Namespace, "Deployment.Name", service.Name)
+				return ctrl.Result{}, err
+			}
+			// Deployment created successfully - return and requeue
+			return ctrl.Result{Requeue: true}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	// TODO update logic
 	return ctrl.Result{Requeue: true}, nil
+}
+
+func (r *WorldReconciler) serviceForRCONMinecraft(m *minecraftv1alpha1.World) *corev1.Service {
+	ls := labelsForMinecraft(m.Name)
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-rcon", m.Name),
+			Namespace: m.Namespace,
+			Labels:    ls,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: ls,
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "rcon",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       int32(m.Spec.ServerProperties.RCONPort),
+					TargetPort: intstr.IntOrString{Type: intstr.String, StrVal: "rcon"},
+				},
+			},
+		},
+	}
+}
+
+func (r *WorldReconciler) serviceForMinecraft(m *minecraftv1alpha1.World) *corev1.Service {
+	ls := labelsForMinecraft(m.Name)
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-server", m.Name),
+			Namespace: m.Namespace,
+			Labels:    ls,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: ls,
+			Type:     corev1.ServiceTypeLoadBalancer,
+			Ports: []corev1.ServicePort{
+				{
+					Name:       "server",
+					Protocol:   corev1.ProtocolTCP,
+					Port:       int32(m.Spec.ServerProperties.ServerPort),
+					TargetPort: intstr.IntOrString{Type: intstr.String, StrVal: "minecraft"},
+				},
+			},
+		},
+	}
 }
 
 // deploymentForMemcached returns a memcached Deployment object
@@ -120,9 +202,32 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
+						{
+							Name:  "jmx-exporter",
+							Image: "spdigital/prometheus-jmx-exporter-kubernetes:0.3.1",
+							Env: []corev1.EnvVar{
+								{
+									Name:  "SHARED_VOLUME_PATH",
+									Value: "/shared-volume",
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									MountPath: "/shared-volume",
+									Name:      "shared-volume",
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{{
 						Image: fmt.Sprintf("sleyva97/minecraft-server:%s-alpine", m.Spec.Version),
 						Name:  "minecraft",
+						Env: []corev1.EnvVar{
+							{
+								Name: "JAVA_OPTS"
+							}
+						},
 						Ports: []corev1.ContainerPort{
 							{
 								ContainerPort: int32(m.Spec.ServerProperties.ServerPort),
@@ -142,6 +247,12 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 						},
 					}},
 					Volumes: []corev1.Volume{
+						{
+							Name: "shared-volume",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
 						{
 							Name: "server-properties",
 							VolumeSource: corev1.VolumeSource{
@@ -163,11 +274,13 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 }
 
 func (r *WorldReconciler) configmapForMinecraft(world *minecraftv1alpha1.World) *corev1.ConfigMap {
+	ls := labelsForMinecraft(world.Name)
 	m := world.Spec.ServerProperties
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      world.Name,
 			Namespace: world.Namespace,
+			Labels:    ls,
 		},
 		Data: map[string]string{
 			"server.properties": fmt.Sprintf(`
