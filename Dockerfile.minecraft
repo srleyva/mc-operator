@@ -2,9 +2,62 @@ FROM openjdk:alpine
 
 WORKDIR /game
 
-RUN apk add curl && curl https://launcher.mojang.com/v1/objects/1b557e7b033b583cd9f66746b7a9ab1ec1673ced/server.jar -o server.jar
+# RUN apk add curl && curl https://launcher.mojang.com/v1/objects/1b557e7b033b583cd9f66746b7a9ab1ec1673ced/server.jar -o server.jar
+RUN apk add curl && curl https://papermc.io/api/v2/projects/paper/versions/1.16.5/builds/545/downloads/paper-1.16.5-545.jar -o server.jar
 RUN java -jar server.jar --initSettings
 
 RUN echo "eula=true" > eula.txt
 
-ENTRYPOINT [ "java", "-Xmx1024M", "-Xms1024M", "-jar", "server.jar", "--port", "8080", "nogui"]
+ENTRYPOINT [ "java", "-Xmx1024M", "-Xms1024M", "-jar", "server.jar", "--nogui", "--noconsole"]
+
+# /game # java -jar server.jar --help
+# Option                                  Description                          
+# ------                                  -----------                          
+# -?, --help                              Show the help                        
+# -C, --commands-settings <File: Yml      File for command settings (default:  
+#   file>                                   commands.yml)                      
+# -P, --plugins <File: Plugin directory>  Plugin directory to use (default:    
+#                                           plugins)                           
+# -S, --spigot-settings <File: Yml file>  File for spigot settings (default:   
+#                                           spigot.yml)                        
+# -W, --universe, --world-container, --   World container (default: .)         
+#   world-dir <File: Directory                                                 
+#   containing worlds>                                                         
+# -b, --bukkit-settings <File: Yml file>  File for bukkit settings (default:   
+#                                           bukkit.yml)                        
+# -c, --config <File: Properties file>    Properties file to use (default:     
+#                                           server.properties)                 
+# -d, --date-format <SimpleDateFormat:    Format of the date to display in the 
+#   Log date format>                        console (for log entries)          
+# --demo                                  Demo mode                            
+# --eraseCache                            Whether to force cache erase during  
+#                                           world upgrade                      
+# --forceUpgrade                          Whether to force a world upgrade     
+# -h, --host, --server-ip <String:        Host to listen on                    
+#   Hostname or IP>                                                            
+# --log-append <Boolean: Log append>      Whether to append to the log file    
+#                                           (default: true)                    
+# --log-count <Integer: Log count>        Specified how many log files to cycle
+#                                           through (default: 1)               
+# --log-limit <Integer: Max log size>     Limits the maximum size of the log   
+#                                           file (0 = unlimited) (default: 0)  
+# --log-pattern <String: Log filename>    Specfies the log filename pattern    
+#                                           (default: server.log)              
+# --log-strip-color                       Strips color codes from log file     
+# --noconsole                             Disables the console                 
+# --nogui                                 Disables the graphical console       
+# --nojline                               Disables jline and emulates the      
+#                                           vanilla console                    
+# -o, --online-mode <Boolean:             Whether to use online authentication 
+#   Authentication>                                                            
+# -p, --port, --server-port <Integer:     Port to listen on                    
+#   Port>                                                                      
+# --paper, --paper-settings <File: Yml    File for paper settings (default:    
+#   file>                                   paper.yml)                         
+# -s, --max-players, --size <Integer:     Maximum amount of players            
+#   Server size>                                                               
+# --server-name <String: Name>            Name of the server (default: Unknown 
+#                                           Server)                            
+# -v, --version                           Show the CraftBukkit Version         
+# -w, --level-name, --world <String:      World name                           
+#   World name>                        

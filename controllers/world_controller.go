@@ -25,6 +25,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -80,10 +81,30 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, nil
 	}
 
-	dep := &appsv1.Deployment{}
+	// // Update
+	// if err := r.Update(ctx, configmap); err != nil {
+	// 	return ctrl.Result{}, err
+	// }
+
+	pvc := r.volumeClaimForMinecraft(world)
+	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, pvc); err != nil {
+		log.Info("Creating a new PVC", "Deployment.Namespace", pvc.Namespace, "Deployment.Name", pvc.Name)
+		if errors.IsNotFound(err) {
+			if err := r.Create(ctx, pvc); err != nil {
+				return ctrl.Result{Requeue: true}, nil
+			}
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, err
+	}
+
+	// if err := r.Update(ctx, pvc); err != nil {
+	// 	return ctrl.Result{}, err
+	// }
+
+	dep := r.deploymentForMinecraft(world, configmap, pvc)
 	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, dep); err != nil {
 		if errors.IsNotFound(err) {
-			dep = r.deploymentForMinecraft(world, configmap)
 			log.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
 			if err := r.Create(ctx, dep); err != nil {
 				if errors.IsAlreadyExists(err) {
@@ -98,9 +119,14 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
+	// if err := r.Update(ctx, dep); err != nil {
+	// 	return ctrl.Result{}, err
+	// }
+
 	rconService := r.serviceForRCONMinecraft(world)
 	if err := r.Get(ctx, types.NamespacedName{Name: rconService.Name, Namespace: rconService.Namespace}, rconService); err != nil {
 		if errors.IsNotFound(err) {
+			rconService = r.serviceForRCONMinecraft(world)
 			log.Info("Creating a new Service", "Deployment.Namespace", rconService.Namespace, "Deployment.Name", rconService.Name)
 			if err := r.Create(ctx, rconService); err != nil {
 				if errors.IsAlreadyExists(err) {
@@ -116,9 +142,14 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
+	// if err := r.Update(ctx, rconService); err != nil {
+	// 	return ctrl.Result{}, err
+	// }
+
 	service := r.serviceForMinecraft(world)
 	if err := r.Get(ctx, types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, service); err != nil {
 		if errors.IsNotFound(err) {
+			service = r.serviceForMinecraft(world)
 			log.Info("Creating a new Service", "Deployment.Namespace", service.Namespace, "Deployment.Name", service.Name)
 			if err := r.Create(ctx, service); err != nil {
 				if errors.IsAlreadyExists(err) {
@@ -133,8 +164,33 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
+	// if err := r.Update(ctx, service); err != nil {
+	// 	return ctrl.Result{}, err
+	// }
+
 	// TODO update logic
 	return ctrl.Result{Requeue: true}, nil
+}
+
+func (r *WorldReconciler) volumeClaimForMinecraft(m *minecraftv1alpha1.World) *corev1.PersistentVolumeClaim {
+	ls := labelsForMinecraft(m.Name)
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      m.Name,
+			Namespace: m.Namespace,
+			Labels:    ls,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				"ReadWriteOnce",
+			},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: *resource.NewQuantity(5*1000*1000*1000, resource.DecimalSI), // 5Gi
+				},
+			},
+		},
+	}
 }
 
 func (r *WorldReconciler) serviceForRCONMinecraft(m *minecraftv1alpha1.World) *corev1.Service {
@@ -183,10 +239,9 @@ func (r *WorldReconciler) serviceForMinecraft(m *minecraftv1alpha1.World) *corev
 }
 
 // deploymentForMemcached returns a memcached Deployment object
-func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, configmap *corev1.ConfigMap) *appsv1.Deployment {
+func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, configmap *corev1.ConfigMap, volume *corev1.PersistentVolumeClaim) *appsv1.Deployment {
 	ls := labelsForMinecraft(m.Name)
-	replicas := m.Spec.Size
-
+	replicas := int32(1) // Can't load balance mc server
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.Name,
@@ -202,32 +257,9 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
-					InitContainers: []corev1.Container{
-						{
-							Name:  "jmx-exporter",
-							Image: "spdigital/prometheus-jmx-exporter-kubernetes:0.3.1",
-							Env: []corev1.EnvVar{
-								{
-									Name:  "SHARED_VOLUME_PATH",
-									Value: "/shared-volume",
-								},
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									MountPath: "/shared-volume",
-									Name:      "shared-volume",
-								},
-							},
-						},
-					},
 					Containers: []corev1.Container{{
 						Image: fmt.Sprintf("sleyva97/minecraft-server:%s-alpine", m.Spec.Version),
 						Name:  "minecraft",
-						Env: []corev1.EnvVar{
-							{
-								Name: "JAVA_OPTS"
-							}
-						},
 						Ports: []corev1.ContainerPort{
 							{
 								ContainerPort: int32(m.Spec.ServerProperties.ServerPort),
@@ -240,6 +272,10 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 						},
 						VolumeMounts: []corev1.VolumeMount{
 							{
+								Name:      "world-volume",
+								MountPath: fmt.Sprintf("/game/%s", m.Spec.ServerProperties.LevelName),
+							},
+							{
 								Name:      "server-properties",
 								MountPath: "/game/server.properties",
 								SubPath:   "server.properties",
@@ -248,18 +284,20 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 					}},
 					Volumes: []corev1.Volume{
 						{
-							Name: "shared-volume",
-							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
-							},
-						},
-						{
 							Name: "server-properties",
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
 										Name: configmap.Name,
 									},
+								},
+							},
+						},
+						{
+							Name: "world-volume",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: volume.Name,
 								},
 							},
 						},
@@ -342,7 +380,7 @@ max-world-size=%d
 				m.EnableCommandBlock,
 				m.EnableQuery,
 				m.GeneratorSettings,
-				m.LevelType,
+				m.LevelName,
 				m.MOTD,
 				m.QueryPort,
 				m.PVP,
