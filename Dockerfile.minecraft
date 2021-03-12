@@ -3,8 +3,12 @@ FROM openjdk:alpine
 WORKDIR /game
 
 # RUN apk add curl && curl https://launcher.mojang.com/v1/objects/1b557e7b033b583cd9f66746b7a9ab1ec1673ced/server.jar -o server.jar
-RUN apk add curl && curl https://papermc.io/api/v2/projects/paper/versions/1.16.5/builds/545/downloads/paper-1.16.5-545.jar -o server.jar
-RUN java -jar server.jar --initSettings
+RUN apk add curl && \
+    curl https://papermc.io/api/v2/projects/paper/versions/1.16.5/builds/545/downloads/paper-1.16.5-545.jar -o server.jar && \
+    mkdir -p plugins/MineJMX/config.yml && \
+    curl https://media.forgecdn.net/files/581/964/MineJMX-1.2.jar -o plugins/MineJMX-1.2.jar
+
+COPY config.yml ./plugins/MineJMX/
 
 RUN echo "eula=true" > eula.txt
 
