@@ -17,14 +17,21 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
+	"fmt"
 	"os"
+	"time"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -78,10 +85,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	ports_cache := controllers.NewPorts(make(map[int32]bool))
+
 	if err = (&controllers.WorldReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("World"),
 		Scheme: mgr.GetScheme(),
+		Ports:  ports_cache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "World")
 		os.Exit(1)
@@ -90,6 +100,7 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("World"),
 		Scheme: mgr.GetScheme(),
+		Ports:  ports_cache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "World")
 		os.Exit(1)
@@ -98,6 +109,7 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("World"),
 		Scheme: mgr.GetScheme(),
+		Ports:  ports_cache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "World")
 		os.Exit(1)
@@ -113,9 +125,34 @@ func main() {
 		os.Exit(1)
 	}
 
+	go func() {
+		setupLog.Info("Setting up port cache")
+		service := corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Name:      "ingress-nginx-controller",
+			Namespace: "ingress-nginx",
+		}}
+		for true {
+			if err := mgr.GetClient().Get(context.Background(), types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, &service); err != nil {
+				setupLog.Error(err, "error creating port cache")
+				time.Sleep(3 * time.Second)
+				continue
+			}
+			setupLog.Info("Found Service!")
+			break
+		}
+
+		for _, port := range service.Spec.Ports {
+			if err := ports_cache.NewPort(port.Port); err != nil {
+				setupLog.Error(err, "Error writing to port cache")
+			}
+		}
+		setupLog.Info("Created port cache", "cache", fmt.Sprintf("%v", ports_cache))
+	}()
+
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+
 }

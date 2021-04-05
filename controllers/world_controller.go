@@ -19,11 +19,15 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sync"
+
+	"math/rand"
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/common/log"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,6 +45,7 @@ type WorldReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+	Ports  *Ports
 }
 
 // +kubebuilder:rbac:groups=minecraft.sleyva.io,resources=worlds,verbs=get;list;watch;create;update;patch;delete
@@ -168,6 +173,12 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	// 	return ctrl.Result{}, err
 	// }
 
+	_, err := r.ingressForMinecraft(world)
+	if err != nil {
+		log.Error(err, "err configuring nginx")
+		return ctrl.Result{}, err
+	}
+
 	// TODO update logic
 	return ctrl.Result{Requeue: true}, nil
 }
@@ -225,7 +236,7 @@ func (r *WorldReconciler) serviceForMinecraft(m *minecraftv1alpha1.World) *corev
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: ls,
-			Type:     corev1.ServiceTypeLoadBalancer,
+			Type:     corev1.ServiceTypeClusterIP,
 			Ports: []corev1.ServicePort{
 				{
 					Name:       "server",
@@ -236,6 +247,18 @@ func (r *WorldReconciler) serviceForMinecraft(m *minecraftv1alpha1.World) *corev
 			},
 		},
 	}
+}
+
+func (r *WorldReconciler) ingressForMinecraft(m *minecraftv1alpha1.World) (*v1.Ingress, error) {
+	// _ := labelsForMinecraft(m.Name)
+	port, err := r.Ports.RandPort()
+	if err != nil {
+		r.Log.Error(err, "Error getting port")
+		return nil, err
+	}
+	r.Log.Info("New Port", "ports", port)
+	r.Log.Info("Port cache", r.Ports)
+	return nil, nil
 }
 
 // deploymentForMemcached returns a memcached Deployment object
@@ -280,6 +303,10 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 							{
 								ContainerPort: int32(m.Spec.ServerProperties.RCONPort),
 								Name:          "rcon",
+							},
+							{
+								ContainerPort: int32(9999),
+								Name:          "jmx",
 							},
 						},
 						VolumeMounts: []corev1.VolumeMount{
@@ -460,4 +487,48 @@ func (r *WorldReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&minecraftv1alpha1.World{}).
 		Owns(&appsv1.Deployment{}).
 		Complete(r)
+}
+
+type portInner map[int32]bool
+
+type Ports struct {
+	inner map[int32]bool
+	sync.RWMutex
+}
+
+func NewPorts(ports map[int32]bool) *Ports {
+	return &Ports{
+		inner: ports,
+	}
+}
+
+func (p *Ports) RandPort() (int32, error) {
+	port := rand.Int31n(49151-1924) + 1924
+	for p.Exists(port) {
+		port = rand.Int31n(49151-1924) + 1924
+	}
+	if err := p.NewPort(port); err != nil {
+		return 0, err
+	}
+
+	return port, nil
+}
+
+func (p *Ports) NewPort(port int32) error {
+	p.Lock()
+	defer p.Unlock()
+	if _, ok := p.inner[port]; ok {
+		return fmt.Errorf("Port already in use")
+	}
+	p.inner[port] = true
+	return nil
+}
+
+func (p *Ports) Exists(port int32) bool {
+	p.RLock()
+	defer p.RUnlock()
+	if _, ok := p.inner[port]; !ok {
+		return false
+	}
+	return true
 }
