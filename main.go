@@ -128,8 +128,8 @@ func main() {
 	go func() {
 		setupLog.Info("Setting up port cache")
 		service := corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name:      "ingress-nginx-controller",
-			Namespace: "ingress-nginx",
+			Name:      "minecraft-lb-kong-proxy",
+			Namespace: "default",
 		}}
 		for true {
 			if err := mgr.GetClient().Get(context.Background(), types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, &service); err != nil {

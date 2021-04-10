@@ -27,15 +27,19 @@ import (
 	"github.com/prometheus/common/log"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/dynamic"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
 	minecraftv1alpha1 "github.com/sleyva/minecraft-operator/api/v1alpha1"
 )
@@ -62,7 +66,7 @@ type WorldReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.0/pkg/reconcile
 func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = r.Log.WithValues("world", req.NamespacedName)
+	logger := r.Log.WithValues("world", req.NamespacedName)
 
 	world := &minecraftv1alpha1.World{}
 	if err := r.Get(ctx, req.NamespacedName, world); err != nil {
@@ -73,12 +77,12 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, configmap); err != nil {
 		if errors.IsNotFound(err) {
 			configmap = r.configmapForMinecraft(world)
-			log.Info("Creating new configmap")
+			logger.Info("Creating new configmap")
 			if err := r.Create(ctx, configmap); err != nil {
 				if errors.IsAlreadyExists(err) {
 					return ctrl.Result{Requeue: true}, nil
 				}
-				log.Error(err, "Failed to create new Deployment", "Deployment.Namespace", configmap.Namespace, "Deployment.Name", configmap.Name)
+				logger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", configmap.Namespace, "Deployment.Name", configmap.Name)
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{Requeue: true}, nil
@@ -86,26 +90,17 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, nil
 	}
 
-	// // Update
-	// if err := r.Update(ctx, configmap); err != nil {
-	// 	return ctrl.Result{}, err
-	// }
-
 	pvc := r.volumeClaimForMinecraft(world)
 	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, pvc); err != nil {
-		log.Info("Creating a new PVC", "Deployment.Namespace", pvc.Namespace, "Deployment.Name", pvc.Name)
+		logger.Info("Creating a new PVC", "Deployment.Namespace", pvc.Namespace, "Deployment.Name", pvc.Name)
 		if errors.IsNotFound(err) {
 			if err := r.Create(ctx, pvc); err != nil {
-				return ctrl.Result{Requeue: true}, nil
+				return ctrl.Result{}, nil
 			}
-			return ctrl.Result{}, err
+			return ctrl.Result{Requeue: true}, err
 		}
 		return ctrl.Result{}, err
 	}
-
-	// if err := r.Update(ctx, pvc); err != nil {
-	// 	return ctrl.Result{}, err
-	// }
 
 	dep := r.deploymentForMinecraft(world, configmap, pvc)
 	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, dep); err != nil {
@@ -123,10 +118,6 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		}
 		return ctrl.Result{}, err
 	}
-
-	// if err := r.Update(ctx, dep); err != nil {
-	// 	return ctrl.Result{}, err
-	// }
 
 	rconService := r.serviceForRCONMinecraft(world)
 	if err := r.Get(ctx, types.NamespacedName{Name: rconService.Name, Namespace: rconService.Namespace}, rconService); err != nil {
@@ -147,10 +138,6 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// if err := r.Update(ctx, rconService); err != nil {
-	// 	return ctrl.Result{}, err
-	// }
-
 	service := r.serviceForMinecraft(world)
 	if err := r.Get(ctx, types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, service); err != nil {
 		if errors.IsNotFound(err) {
@@ -169,18 +156,155 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// if err := r.Update(ctx, service); err != nil {
-	// 	return ctrl.Result{}, err
-	// }
-
-	_, err := r.ingressForMinecraft(world)
-	if err != nil {
-		log.Error(err, "err configuring nginx")
-		return ctrl.Result{}, err
+	// TODO update logic
+	if err := r.ingressForMinecraft(world, ctx); err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return ctrl.Result{}, err
+		}
 	}
 
-	// TODO update logic
-	return ctrl.Result{Requeue: true}, nil
+	return ctrl.Result{}, nil
+}
+
+func (r *WorldReconciler) ingressForMinecraft(m *minecraftv1alpha1.World, ctx context.Context) error {
+
+	// Check if port exists
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "minecraft-lb-kong-proxy",
+			Namespace: "default",
+		},
+	}
+	if err := r.Get(ctx, types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, service); err != nil {
+		return err
+	}
+	for _, port := range service.Spec.Ports {
+		if port.Name == m.Name {
+			return errors.NewAlreadyExists(schema.GroupResource{Group: m.GroupVersionKind().Group, Resource: m.Kind}, m.Name)
+		}
+	}
+
+	// Get port
+	port, err := r.Ports.RandPort()
+	if err != nil {
+		return err
+	}
+
+	// Open port on service
+	servicePatch := client.MergeFrom(service.DeepCopy())
+	service.Spec.Ports = append(service.Spec.Ports, corev1.ServicePort{Name: m.Name, Port: port, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(int(port))})
+	r.Log.Info("Opening Service", "World", m.Name)
+	if err := r.Patch(ctx, service, servicePatch); err != nil {
+		if !errors.IsInvalid(err) {
+			return err
+		}
+		return nil
+	}
+
+	// Add Env Config and Port to deployment
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "minecraft-lb-kong",
+			Namespace: "default",
+		},
+	}
+	if err := r.Get(ctx, types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, deployment); err != nil {
+		return err
+	}
+
+	patch := client.MergeFrom(deployment.DeepCopy())
+
+	containerIndex := 0
+	for i, c := range deployment.Spec.Template.Spec.Containers {
+		if c.Name == "proxy" {
+			containerIndex = i
+		}
+	}
+
+	envIndex := 0
+	for i, e := range deployment.Spec.Template.Spec.Containers[containerIndex].Env {
+		if e.Name == "KONG_STREAM_LISTEN" {
+			envIndex = i
+		}
+	}
+
+	if deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value == "off" {
+		deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value = fmt.Sprintf("0.0.0.0:%d", port)
+	} else {
+		deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value = fmt.Sprintf(
+			"%s, 0.0.0.0:%d",
+			deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value,
+			port,
+		)
+	}
+
+	r.Log.Info("Patching Ingress Container", "World", m.Name)
+	if err := r.Client.Patch(ctx, deployment, patch); err != nil {
+		return err
+	}
+
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "configuration.konghq.com/v1beta1",
+			"kind":       "TCPIngress",
+			"metadata": map[string]interface{}{
+				"name":      fmt.Sprintf("%s-tcp-ingress", m.Name),
+				"namespace": m.Namespace,
+				"annotations": map[string]interface{}{
+					"kubernetes.io/ingress.class": "kong",
+				},
+			},
+			"spec": map[string]interface{}{
+				"rules": []map[string]interface{}{
+					{
+						"port": port,
+						"backend": map[string]interface{}{
+							"serviceName": fmt.Sprintf("%s-server", m.Name),
+							"servicePort": m.Spec.ServerProperties.ServerPort,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	gkv := obj.GroupVersionKind()
+	mapping, err := r.Client.RESTMapper().RESTMapping(gkv.GroupKind(), gkv.Version)
+	if err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return err
+		}
+	}
+
+	cfg, err := config.GetConfig()
+	if err != nil {
+		return err
+	}
+
+	// 2. Prepare the dynamic client
+	dyn, err := dynamic.NewForConfig(cfg)
+	if err != nil {
+		return err
+	}
+
+	var dr dynamic.ResourceInterface
+	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
+		// namespaced resources should specify the namespace
+		dr = dyn.Resource(mapping.Resource).Namespace(obj.GetNamespace())
+	} else {
+		// for cluster-wide resources
+		dr = dyn.Resource(mapping.Resource)
+	}
+
+	_, err = dr.Create(ctx, obj, metav1.CreateOptions{})
+	if err != nil {
+		if !errors.IsAlreadyExists(err) {
+			return err
+		}
+	}
+	r.Log.Info("Created Ingress")
+
+	return nil
 }
 
 func (r *WorldReconciler) volumeClaimForMinecraft(m *minecraftv1alpha1.World) *corev1.PersistentVolumeClaim {
@@ -247,18 +371,6 @@ func (r *WorldReconciler) serviceForMinecraft(m *minecraftv1alpha1.World) *corev
 			},
 		},
 	}
-}
-
-func (r *WorldReconciler) ingressForMinecraft(m *minecraftv1alpha1.World) (*v1.Ingress, error) {
-	// _ := labelsForMinecraft(m.Name)
-	port, err := r.Ports.RandPort()
-	if err != nil {
-		r.Log.Error(err, "Error getting port")
-		return nil, err
-	}
-	r.Log.Info("New Port", "ports", port)
-	r.Log.Info("Port cache", r.Ports)
-	return nil, nil
 }
 
 // deploymentForMemcached returns a memcached Deployment object

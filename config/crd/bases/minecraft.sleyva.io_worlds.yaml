@@ -192,16 +192,12 @@ spec:
                     type: boolean
                     default: true
                 type: object
-              size:
-                format: int32
-                type: integer
               version:
                 type: string
                 default: "1.16"
             required:
             - name
             - serverProperties
-            - size
             type: object
           status:
             description: WorldStatus defines the observed state of World

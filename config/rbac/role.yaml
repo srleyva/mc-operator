@@ -6,10 +6,22 @@ metadata:
   creationTimestamp: null
   name: manager-role
 rules:
+- apiGroups: ["configuration.konghq.com"]
+  resources:
+  - tcpingresses
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
 - apiGroups: [""]
   resources:
   - services
   - configmaps
+  - persistentvolumeclaims
   verbs:
   - create
   - delete

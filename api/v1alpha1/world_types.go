@@ -24,7 +24,6 @@ import (
 type WorldSpec struct {
 	ServerProperties *ServerProperties `json:"serverProperties"`
 	Version          string            `json:"version"`
-	Size             int32             `json:"size"`
 	Name             string            `json:"name"`
 }
 
