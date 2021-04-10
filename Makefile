@@ -136,3 +136,11 @@ bundle: manifests kustomize
 .PHONY: bundle-build
 bundle-build:
 	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+kong:
+	helm upgrade --install minecraft-lb kong/kong --set ingressController.installCRDs=false --set admin.enabled=true --set admin.type=ClusterIP
+
+get-world-mappings:
+	kubectl patch deploy minecraft-lb-kong --patch '$(shell kubectl get svc  minecraft-lb-kong-proxy -o jsonpath='{range .spec.ports[*]}{.port}{"\n"}{end}' | python3 build_patch.py)'
+
+rebuild-service:

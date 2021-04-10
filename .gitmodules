@@ -1,0 +1,3 @@
+[submodule "konga"]
+	path = konga
+	url = git@github.com:pantsel/konga.git
