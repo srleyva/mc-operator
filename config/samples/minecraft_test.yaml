@@ -1,0 +1,12 @@
+apiVersion: minecraft.sleyva.io/v1alpha1
+kind: World
+metadata:
+  name: stephens-world
+spec:
+  name: "stephens-world"
+  version: "1.16"
+  serverProperties:
+    enableRCON: true
+    rconPassword: "test"
+    rconPort: 8081
+    serverPort: 8080

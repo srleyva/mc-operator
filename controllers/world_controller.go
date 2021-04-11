@@ -201,47 +201,48 @@ func (r *WorldReconciler) ingressForMinecraft(m *minecraftv1alpha1.World, ctx co
 		return nil
 	}
 
+	// Just opening multiple ports in batch ops
 	// Add Env Config and Port to deployment
-	deployment := &appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "minecraft-lb-kong",
-			Namespace: "default",
-		},
-	}
-	if err := r.Get(ctx, types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, deployment); err != nil {
-		return err
-	}
+	// deployment := &appsv1.Deployment{
+	// 	ObjectMeta: metav1.ObjectMeta{
+	// 		Name:      "minecraft-lb-kong",
+	// 		Namespace: "default",
+	// 	},
+	// }
+	// if err := r.Get(ctx, types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, deployment); err != nil {
+	// 	return err
+	// }
 
-	patch := client.MergeFrom(deployment.DeepCopy())
+	// patch := client.MergeFrom(deployment.DeepCopy())
 
-	containerIndex := 0
-	for i, c := range deployment.Spec.Template.Spec.Containers {
-		if c.Name == "proxy" {
-			containerIndex = i
-		}
-	}
+	// containerIndex := 0
+	// for i, c := range deployment.Spec.Template.Spec.Containers {
+	// 	if c.Name == "proxy" {
+	// 		containerIndex = i
+	// 	}
+	// }
 
-	envIndex := 0
-	for i, e := range deployment.Spec.Template.Spec.Containers[containerIndex].Env {
-		if e.Name == "KONG_STREAM_LISTEN" {
-			envIndex = i
-		}
-	}
+	// envIndex := 0
+	// for i, e := range deployment.Spec.Template.Spec.Containers[containerIndex].Env {
+	// 	if e.Name == "KONG_STREAM_LISTEN" {
+	// 		envIndex = i
+	// 	}
+	// }
 
-	if deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value == "off" {
-		deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value = fmt.Sprintf("0.0.0.0:%d", port)
-	} else {
-		deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value = fmt.Sprintf(
-			"%s, 0.0.0.0:%d",
-			deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value,
-			port,
-		)
-	}
+	// if deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value == "off" {
+	// 	deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value = fmt.Sprintf("0.0.0.0:%d", port)
+	// } else {
+	// 	deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value = fmt.Sprintf(
+	// 		"%s, 0.0.0.0:%d",
+	// 		deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value,
+	// 		port,
+	// 	)
+	// }
 
-	r.Log.Info("Patching Ingress Container", "World", m.Name)
-	if err := r.Client.Patch(ctx, deployment, patch); err != nil {
-		return err
-	}
+	// r.Log.Info("Patching Ingress Container", "World", m.Name)
+	// if err := r.Client.Patch(ctx, deployment, patch); err != nil {
+	// 	return err
+	// }
 
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -606,18 +607,22 @@ type portInner map[int32]bool
 type Ports struct {
 	inner map[int32]bool
 	sync.RWMutex
+	min int32
+	max int32
 }
 
-func NewPorts(ports map[int32]bool) *Ports {
+func NewPorts(ports map[int32]bool, max int32, min int32) *Ports {
 	return &Ports{
 		inner: ports,
+		max:   max,
+		min:   min,
 	}
 }
 
 func (p *Ports) RandPort() (int32, error) {
-	port := rand.Int31n(49151-1924) + 1924
+	port := rand.Int31n(p.max-p.min) + p.min
 	for p.Exists(port) {
-		port = rand.Int31n(49151-1924) + 1924
+		port = rand.Int31n(p.max-p.min) + p.min
 	}
 	if err := p.NewPort(port); err != nil {
 		return 0, err

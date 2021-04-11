@@ -85,7 +85,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	ports_cache := controllers.NewPorts(make(map[int32]bool))
+	ports_cache := controllers.NewPorts(make(map[int32]bool), 2025, 1025)
 
 	if err = (&controllers.WorldReconciler{
 		Client: mgr.GetClient(),
