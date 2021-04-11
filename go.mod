@@ -9,6 +9,7 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.2.1-0.20200609204449-6bcf6f8577f0 // indirect
 	contrib.go.opencensus.io/exporter/stackdriver v0.13.2 // indirect
 	contrib.go.opencensus.io/exporter/zipkin v0.1.1 // indirect
+	github.com/766b/chi-logger v0.0.0-20180309043024-d2679d398ce4 // indirect
 	github.com/Azure/go-autorest/autorest v0.11.1 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.5 // indirect
 	github.com/GoogleCloudPlatform/testgrid v0.0.13 // indirect
@@ -25,6 +26,7 @@ require (
 	github.com/containerd/containerd v1.3.3 // indirect
 	github.com/coreos/bbolt v1.3.3 // indirect
 	github.com/coreos/etcd v3.3.17+incompatible // indirect
+	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
 	github.com/dgryski/go-gk v0.0.0-20200319235926-a69029f61654 // indirect
 	github.com/djherbis/atime v1.0.0 // indirect
 	github.com/docker/cli v0.0.0-20200210162036-a4bedce16568 // indirect
@@ -33,6 +35,9 @@ require (
 	github.com/frankban/quicktest v1.8.1 // indirect
 	github.com/fsouza/fake-gcs-server v1.19.4 // indirect
 	github.com/go-bindata/go-bindata/v3 v3.1.3 // indirect
+	github.com/go-chi/chi v1.5.4 // indirect
+	github.com/go-chi/jwtauth/v5 v5.0.1 // indirect
+	github.com/go-chi/render v1.0.1 // indirect
 	github.com/go-logr/logr v0.3.0
 	github.com/go-openapi/spec v0.19.6 // indirect
 	github.com/go-openapi/swag v0.19.7 // indirect
@@ -64,6 +69,7 @@ require (
 	github.com/kong/deck v1.2.1 // indirect
 	github.com/kong/kubernetes-ingress-controller v0.0.5 // indirect
 	github.com/kr/text v0.2.0 // indirect
+	github.com/labstack/echo/v4 v4.2.2 // indirect
 	github.com/mailru/easyjson v0.7.1-0.20191009090205-6c0755d89d1e // indirect
 	github.com/mattn/go-zglob v0.0.2 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
@@ -83,7 +89,8 @@ require (
 	github.com/tidwall/match v1.0.1 // indirect
 	github.com/tsenart/vegeta v12.7.1-0.20190725001342-b5f4fca92137+incompatible // indirect
 	go.uber.org/automaxprocs v1.3.0 // indirect
-	golang.org/x/tools v0.0.0-20200731060945-b5fad4ed8dd6 // indirect
+	go.uber.org/zap v1.15.0 // indirect
+	golang.org/x/crypto v0.0.0-20201217014255-9d1352758620 // indirect
 	google.golang.org/genproto v0.0.0-20200731012542-8145dea6a485 // indirect
 	google.golang.org/grpc v1.31.0 // indirect
 	gopkg.in/check.v1 v1.0.0-20200227125254-8fa46927fb4f // indirect

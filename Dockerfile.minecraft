@@ -1,4 +1,4 @@
-FROM openjdk:alpine
+FROM  openjdk:15-jdk-alpine
 
 WORKDIR /game
 
@@ -8,7 +8,7 @@ RUN apk add curl && \
 # COPY ./minecraft-prometheus-exporter-2.4.0.jar ./plugins
 RUN echo "eula=true" > eula.txt
 
-ENTRYPOINT [ "java", "-Xmx1024M", "-Xms1024M", "-jar", "server.jar", "--nogui", "--noconsole", "-p", "8080"]
+ENTRYPOINT [ "java", "-Xmx1024M", "-Xms1024M", "-jar", "server.jar", "--nogui", "--universe", "/worlds", "--noconsole", "-p", "8080"]
 
 # /game # java -jar server.jar --help
 # Option                                  Description                          

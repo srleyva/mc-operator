@@ -70,40 +70,99 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	world := &minecraftv1alpha1.World{}
 	if err := r.Get(ctx, req.NamespacedName, world); err != nil {
+		if errors.IsNotFound(err) {
+			return ctrl.Result{}, nil
+		}
 		return ctrl.Result{}, err
 	}
 
-	configmap := &corev1.ConfigMap{}
-	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, configmap); err != nil {
+	servicePortFinalizer := "minecraft.sleyva.io.svc.port"
+	if world.ObjectMeta.DeletionTimestamp.IsZero() {
+		if !containsString(world.ObjectMeta.Finalizers, servicePortFinalizer) {
+			world.ObjectMeta.Finalizers = append(world.ObjectMeta.Finalizers, servicePortFinalizer)
+			if err := r.Update(context.Background(), world); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		// The object is being deleted
+		if containsString(world.ObjectMeta.Finalizers, servicePortFinalizer) {
+			// our finalizer is present, so lets handle any external dependency
+			if err := r.removeSvcPort(world); err != nil {
+				// if fail to delete the external dependency here, return with error
+				// so that it can be retried
+				if errors.IsNotFound(err) {
+					return ctrl.Result{}, nil
+				}
+				return ctrl.Result{}, err
+			}
+
+			// remove our finalizer from the list and update it.
+			world.ObjectMeta.Finalizers = removeString(world.ObjectMeta.Finalizers, servicePortFinalizer)
+			if err := r.Update(context.Background(), world); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+
+		// Stop reconciliation as the item is being deleted
+		return ctrl.Result{}, nil
+	}
+
+	namespace := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: world.Name,
+		},
+	}
+
+	if err := r.Get(ctx, types.NamespacedName{Name: namespace.Name}, &namespace); err != nil {
 		if errors.IsNotFound(err) {
-			configmap = r.configmapForMinecraft(world)
-			logger.Info("Creating new configmap")
-			if err := r.Create(ctx, configmap); err != nil {
+			logger.Info("Creating new namespace", "name", namespace.Name)
+			if err := r.Create(ctx, &namespace); err != nil {
 				if errors.IsAlreadyExists(err) {
 					return ctrl.Result{Requeue: true}, nil
 				}
-				logger.Error(err, "Failed to create new Deployment", "Deployment.Namespace", configmap.Namespace, "Deployment.Name", configmap.Name)
+				logger.Error(err, "Failed to create namespace", "Name", namespace.Name)
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{Requeue: true}, nil
 		}
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, err
 	}
 
-	pvc := r.volumeClaimForMinecraft(world)
-	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, pvc); err != nil {
-		logger.Info("Creating a new PVC", "Deployment.Namespace", pvc.Namespace, "Deployment.Name", pvc.Name)
+	mcConfigmap := r.configmapForMinecraft(world)
+	if err := r.Get(ctx, types.NamespacedName{Name: mcConfigmap.Name, Namespace: mcConfigmap.Namespace}, mcConfigmap); err != nil {
 		if errors.IsNotFound(err) {
-			if err := r.Create(ctx, pvc); err != nil {
-				return ctrl.Result{}, nil
+			logger.Info("Creating new configmap", "Name", mcConfigmap.Name)
+			if err := r.Create(ctx, mcConfigmap); err != nil {
+				if errors.IsAlreadyExists(err) {
+					return ctrl.Result{Requeue: true}, nil
+				}
+				logger.Error(err, "error creating configmap", "name", mcConfigmap.Name)
+				return ctrl.Result{}, err
 			}
-			return ctrl.Result{Requeue: true}, err
+			return ctrl.Result{Requeue: true}, nil
 		}
 		return ctrl.Result{}, err
 	}
 
-	dep := r.deploymentForMinecraft(world, configmap, pvc)
-	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Namespace}, dep); err != nil {
+	pvc := r.volumeClaimForMinecraft(world)
+	if err := r.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, pvc); err != nil {
+		logger.Info("Creating a new PVC", "Deployment.Namespace", pvc.Namespace, "Deployment.Name", pvc.Name)
+		if errors.IsNotFound(err) {
+			if err := r.Create(ctx, pvc); err != nil {
+				if errors.IsAlreadyExists(err) {
+					return ctrl.Result{Requeue: true}, nil
+				}
+				logger.Error(err, "failed to create pvc")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{Requeue: true}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	dep := r.deploymentForMinecraft(world, mcConfigmap, pvc)
+	if err := r.Get(ctx, types.NamespacedName{Name: world.Name, Namespace: world.Name}, dep); err != nil {
 		if errors.IsNotFound(err) {
 			log.Info("Creating a new Deployment", "Deployment.Namespace", dep.Namespace, "Deployment.Name", dep.Name)
 			if err := r.Create(ctx, dep); err != nil {
@@ -122,13 +181,12 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	rconService := r.serviceForRCONMinecraft(world)
 	if err := r.Get(ctx, types.NamespacedName{Name: rconService.Name, Namespace: rconService.Namespace}, rconService); err != nil {
 		if errors.IsNotFound(err) {
-			rconService = r.serviceForRCONMinecraft(world)
 			log.Info("Creating a new Service", "Deployment.Namespace", rconService.Namespace, "Deployment.Name", rconService.Name)
 			if err := r.Create(ctx, rconService); err != nil {
 				if errors.IsAlreadyExists(err) {
 					return ctrl.Result{Requeue: true}, nil
 				}
-				log.Error(err, "Failed to create new Service", "Deployment.Namespace", rconService.Namespace, "Deployment.Name", rconService.Name)
+				log.Error(err, "Failed to create new RCON Service", "Name", rconService.Name)
 				return ctrl.Result{}, err
 			}
 			// Deployment created successfully - return and requeue
@@ -141,8 +199,7 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	service := r.serviceForMinecraft(world)
 	if err := r.Get(ctx, types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, service); err != nil {
 		if errors.IsNotFound(err) {
-			service = r.serviceForMinecraft(world)
-			log.Info("Creating a new Service", "Deployment.Namespace", service.Namespace, "Deployment.Name", service.Name)
+			log.Info("Creating a new Server Service", "Name", service.Name)
 			if err := r.Create(ctx, service); err != nil {
 				if errors.IsAlreadyExists(err) {
 					return ctrl.Result{Requeue: true}, nil
@@ -156,7 +213,6 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// TODO update logic
 	if err := r.ingressForMinecraft(world, ctx); err != nil {
 		if !errors.IsAlreadyExists(err) {
 			return ctrl.Result{}, err
@@ -164,6 +220,83 @@ func (r *WorldReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *WorldReconciler) removeSvcPort(world *minecraftv1alpha1.World) error {
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "minecraft-lb-kong-proxy",
+			Namespace: "default",
+		},
+	}
+	if err := r.Get(context.Background(), types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, service); err != nil {
+		return err
+	}
+
+	var portIndex int
+	found := false
+	for i, port := range service.Spec.Ports {
+		if port.Name == world.Name {
+			portIndex = i
+			found = true
+		}
+	}
+
+	if !found {
+		return errors.NewNotFound(schema.GroupResource{Group: world.GroupVersionKind().Group, Resource: world.Kind}, world.Name)
+	}
+
+	patch := client.MergeFrom(service.DeepCopy())
+	r.Log.Info("Removing service port", "World", world.Name, "Port", service.Spec.Ports[portIndex])
+	r.Log.Info(fmt.Sprintf("Before: %v", service.Spec.Ports))
+	service.Spec.Ports = remove(service.Spec.Ports, portIndex)
+	r.Log.Info(fmt.Sprintf("After: %v", service.Spec.Ports))
+
+	if err := r.Patch(context.Background(), service, patch); err != nil {
+		if !errors.IsInvalid(err) {
+			return err
+		}
+	}
+
+	namespace := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: world.Name,
+		},
+	}
+
+	if err := r.Delete(context.Background(), &namespace); err != nil {
+		if errors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	return nil
+}
+
+func remove(s []corev1.ServicePort, i int) []corev1.ServicePort {
+	s[len(s)-1], s[i] = s[i], s[len(s)-1]
+	return s[:len(s)-1]
+}
+
+// Helper functions to check and remove string from a slice of strings.
+func containsString(slice []string, s string) bool {
+	for _, item := range slice {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+func removeString(slice []string, s string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			continue
+		}
+		result = append(result, item)
+	}
+	return
 }
 
 func (r *WorldReconciler) ingressForMinecraft(m *minecraftv1alpha1.World, ctx context.Context) error {
@@ -201,56 +334,13 @@ func (r *WorldReconciler) ingressForMinecraft(m *minecraftv1alpha1.World, ctx co
 		return nil
 	}
 
-	// Just opening multiple ports in batch ops
-	// Add Env Config and Port to deployment
-	// deployment := &appsv1.Deployment{
-	// 	ObjectMeta: metav1.ObjectMeta{
-	// 		Name:      "minecraft-lb-kong",
-	// 		Namespace: "default",
-	// 	},
-	// }
-	// if err := r.Get(ctx, types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, deployment); err != nil {
-	// 	return err
-	// }
-
-	// patch := client.MergeFrom(deployment.DeepCopy())
-
-	// containerIndex := 0
-	// for i, c := range deployment.Spec.Template.Spec.Containers {
-	// 	if c.Name == "proxy" {
-	// 		containerIndex = i
-	// 	}
-	// }
-
-	// envIndex := 0
-	// for i, e := range deployment.Spec.Template.Spec.Containers[containerIndex].Env {
-	// 	if e.Name == "KONG_STREAM_LISTEN" {
-	// 		envIndex = i
-	// 	}
-	// }
-
-	// if deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value == "off" {
-	// 	deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value = fmt.Sprintf("0.0.0.0:%d", port)
-	// } else {
-	// 	deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value = fmt.Sprintf(
-	// 		"%s, 0.0.0.0:%d",
-	// 		deployment.Spec.Template.Spec.Containers[containerIndex].Env[envIndex].Value,
-	// 		port,
-	// 	)
-	// }
-
-	// r.Log.Info("Patching Ingress Container", "World", m.Name)
-	// if err := r.Client.Patch(ctx, deployment, patch); err != nil {
-	// 	return err
-	// }
-
 	obj := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "configuration.konghq.com/v1beta1",
 			"kind":       "TCPIngress",
 			"metadata": map[string]interface{}{
 				"name":      fmt.Sprintf("%s-tcp-ingress", m.Name),
-				"namespace": m.Namespace,
+				"namespace": m.Name,
 				"annotations": map[string]interface{}{
 					"kubernetes.io/ingress.class": "kong",
 				},
@@ -313,7 +403,7 @@ func (r *WorldReconciler) volumeClaimForMinecraft(m *minecraftv1alpha1.World) *c
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.Name,
-			Namespace: m.Namespace,
+			Namespace: m.Name,
 			Labels:    ls,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
@@ -334,7 +424,7 @@ func (r *WorldReconciler) serviceForRCONMinecraft(m *minecraftv1alpha1.World) *c
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-rcon", m.Name),
-			Namespace: m.Namespace,
+			Namespace: m.Name,
 			Labels:    ls,
 		},
 		Spec: corev1.ServiceSpec{
@@ -356,7 +446,7 @@ func (r *WorldReconciler) serviceForMinecraft(m *minecraftv1alpha1.World) *corev
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-server", m.Name),
-			Namespace: m.Namespace,
+			Namespace: m.Name,
 			Labels:    ls,
 		},
 		Spec: corev1.ServiceSpec{
@@ -381,7 +471,7 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 	dep := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      m.Name,
-			Namespace: m.Namespace,
+			Namespace: m.Name,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
@@ -398,8 +488,8 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 						ImagePullPolicy: corev1.PullAlways,
 						Command: []string{
 							"java",
-							"-Xmx1024M",
-							"-Xms1024M",
+							"-Xmx1584M",
+							"-Xms512M",
 							"-jar",
 							"server.jar",
 							"--nogui",
@@ -408,6 +498,14 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 							"-c", "/etc/server.properties",
 						},
 						Name: "minecraft",
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								"memory": resource.MustParse("1584Mi"),
+							},
+							Requests: corev1.ResourceList{
+								"memory": resource.MustParse("512Mi"),
+							},
+						},
 						Ports: []corev1.ContainerPort{
 							{
 								ContainerPort: int32(m.Spec.ServerProperties.ServerPort),
@@ -469,7 +567,7 @@ func (r *WorldReconciler) configmapForMinecraft(world *minecraftv1alpha1.World) 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      world.Name,
-			Namespace: world.Namespace,
+			Namespace: world.Name,
 			Labels:    ls,
 		},
 		Data: map[string]string{

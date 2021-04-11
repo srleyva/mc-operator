@@ -74,7 +74,7 @@ spec:
                     default: true
                   enforceWhitelist:
                     type: boolean
-                    default: true
+                    default: false
                   entityBroadcastPercentage:
                     type: integer
                     default: 100
@@ -135,7 +135,7 @@ spec:
                     maximum: 4
                   playerIdleTimeout:
                     type: integer
-                    default: 0
+                    default: 300
                   preventProxyConnections:
                     type: boolean
                     default: false
@@ -150,9 +150,10 @@ spec:
                     default: 0
                   rconPassword:
                     type: string
+                    default: "password"
                   rconPort:
                     type: integer
-                    default: 25575
+                    default: 8081
                   resourcePack:
                     type: string
                   resourcePackSha1:
@@ -161,7 +162,7 @@ spec:
                     type: string
                   serverPort:
                     type: integer
-                    default: 25565
+                    default: 8080
                   snooperEnabled:
                     type: boolean
                     default: false
@@ -190,7 +191,7 @@ spec:
                     maximum: 32
                   whiteList:
                     type: boolean
-                    default: true
+                    default: false
                 type: object
               version:
                 type: string

@@ -22,6 +22,7 @@ rules:
   - services
   - configmaps
   - persistentvolumeclaims
+  - namespaces
   verbs:
   - create
   - delete

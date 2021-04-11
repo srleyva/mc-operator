@@ -5,6 +5,19 @@ metadata:
     control-plane: controller-manager
   name: system
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minecraft-control-plane
+spec:
+  selector:
+    control-plane: controller-manager
+  type: LoadBalancer
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: "web-server"
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -30,6 +43,9 @@ spec:
         args:
         - --leader-elect
         image: controller:latest
+        ports:
+        - name: "web-server"
+          containerPort: 3000
         imagePullPolicy: Always
         name: manager
         securityContext:
