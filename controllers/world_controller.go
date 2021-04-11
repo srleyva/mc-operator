@@ -533,7 +533,7 @@ max-world-size=%d
 				m.EnableQuery,
 				m.GeneratorSettings,
 				m.LevelName,
-				m.MOTD,
+				world.Name,
 				m.QueryPort,
 				m.PVP,
 				m.GenerateStructures,
