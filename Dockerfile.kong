@@ -1,0 +1,8 @@
+FROM kong:2.3
+
+USER root
+
+RUN apk --update add gcc linux-headers musl-dev openssl openssl-dev make bsd-compat-headers m4
+RUN luarocks install bit32
+RUN luarocks install http
+RUN luarocks install redis-lua

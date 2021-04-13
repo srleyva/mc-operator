@@ -138,7 +138,13 @@ bundle-build:
 	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 kong:
-	helm upgrade --install minecraft-lb kong/kong --set ingressController.installCRDs=false
-
+	helm upgrade --install minecraft-lb kong/kong -f kong.yaml
+	
 set_range:
 	kubectl patch deploy minecraft-lb-kong --patch "$(shell python3 build_patch.py generate_ports)"
+
+lua_plugin:
+	kubectl delete configmap kong-plugin-scale kong-plugin-http kong-plugin-http-compat kong-plugin-redis || true
+	kubectl create configmap kong-plugin-scale --from-file=lua_plugins/scale
+	kubectl create configmap kong-plugin-redis --from-file=lua_plugins/redis
+
