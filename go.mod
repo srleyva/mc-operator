@@ -41,6 +41,7 @@ require (
 	github.com/go-logr/logr v0.3.0
 	github.com/go-openapi/spec v0.19.6 // indirect
 	github.com/go-openapi/swag v0.19.7 // indirect
+	github.com/go-redis/redis/v8 v8.8.0 // indirect
 	github.com/go-test/deep v1.0.4 // indirect
 	github.com/go-yaml/yaml v2.1.0+incompatible // indirect
 	github.com/gobuffalo/envy v1.7.1 // indirect
@@ -72,14 +73,15 @@ require (
 	github.com/labstack/echo/v4 v4.2.2 // indirect
 	github.com/mailru/easyjson v0.7.1-0.20191009090205-6c0755d89d1e // indirect
 	github.com/mattn/go-zglob v0.0.2 // indirect
+	github.com/mediocregopher/radix/v3 v3.7.0 // indirect
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/natefinch/lumberjack v2.0.0+incompatible // indirect
 	github.com/nats-io/gnatsd v1.4.1 // indirect
 	github.com/nats-io/go-nats v1.7.0 // indirect
 	github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e // indirect
 	github.com/octago/sflags v0.2.0 // indirect
-	github.com/onsi/ginkgo v1.14.1
-	github.com/onsi/gomega v1.10.2
+	github.com/onsi/ginkgo v1.15.0
+	github.com/onsi/gomega v1.10.5
 	github.com/openzipkin/zipkin-go v0.2.2 // indirect
 	github.com/prometheus/common v0.10.0
 	github.com/streadway/quantile v0.0.0-20150917103942-b0c588724d25 // indirect

@@ -150,6 +150,6 @@ set_range:
 	kubectl patch deploy minecraft-lb-kong --patch "$(shell python3 build_patch.py generate_ports)"
 
 lua_plugin:
-	kubectl delete configmap kong-plugin-minecraft
+	kubectl delete configmap kong-plugin-minecraft || true
 	kubectl create configmap kong-plugin-minecraft --from-file=minecraft
 	kubectl rollout restart deployment minecraft-lb-kong

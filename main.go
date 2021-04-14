@@ -35,6 +35,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/mediocregopher/radix/v3"
 	uberzap "go.uber.org/zap"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -204,9 +205,13 @@ func StartServer(k8sClient client.Client) error {
 		return err
 	}
 	logger.Info("Admin Token", uberzap.String("token", tokenString))
+	client, err := radix.NewPool("tcp", "redis-master.default.svc.cluster.local:6379", 10) // or any other client
+	if err != nil {
+		return err
+	}
 
 	g := e.Group("/v1")
-	handler := Routes(k8sClient, logger)
+	handler := Routes(k8sClient, logger, client)
 	g.PUT("/worlds/:name", handler.NewWorld)
 	g.GET("/worlds/:name", handler.GetWorld)
 	g.DELETE("/worlds/:name", handler.DeleteWorld)
@@ -227,6 +232,7 @@ func StartServer(k8sClient client.Client) error {
 type Handler struct {
 	k8sClient client.Client
 	logger    *uberzap.Logger
+	redis     radix.Client
 }
 
 type WorldRequest struct {
@@ -244,8 +250,8 @@ type ListWorldResp struct {
 	Port int64  `json:"port"`
 }
 
-func Routes(k8sClient client.Client, logger *uberzap.Logger) *Handler {
-	handler := Handler{k8sClient, logger}
+func Routes(k8sClient client.Client, logger *uberzap.Logger, client radix.Client) *Handler {
+	handler := Handler{k8sClient, logger, client}
 	return &handler
 }
 
@@ -270,16 +276,35 @@ func (h *Handler) ScaleWorld(c echo.Context) error {
 		}
 	}
 
-	replicas := int32(size)
-	patch := client.MergeFrom(deployment.DeepCopy())
-	deployment.Spec.Replicas = &replicas
+	go func() {
 
-	if err := h.k8sClient.Patch(context.Background(), &deployment, patch); err != nil {
-		h.logger.Error("err patching deployment", uberzap.Error(err))
-		return echo.ErrInternalServerError
-	}
+		replicas := int32(size)
+		if replicas == 0 {
+			time.Sleep(5 * time.Minute)
+			var conn int
+			if err := h.redis.Do(radix.Cmd(&conn, "GET", name)); err != nil {
+				// If can't read redis leave world online
+				h.logger.Error("err getting connections", uberzap.Error(err))
+				return
+			}
+			if conn > 0 {
+				h.logger.Info("Redis connections shutdown aborted")
+				return
+			}
+			h.logger.Info("No redis connection proceeding with shutdown")
+		}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{"scaled": replicas})
+		patch := client.MergeFrom(deployment.DeepCopy())
+		deployment.Spec.Replicas = &replicas
+
+		if err := h.k8sClient.Patch(context.Background(), &deployment, patch); err != nil {
+			h.logger.Error("err patching deployment", uberzap.Error(err))
+			return
+		}
+
+	}()
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"scaling scheduled": size})
 }
 
 func (h *Handler) GetWorlds(c echo.Context) error {
