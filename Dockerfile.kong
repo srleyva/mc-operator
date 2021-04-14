@@ -6,3 +6,5 @@ RUN apk --update add gcc linux-headers musl-dev openssl openssl-dev make bsd-com
 RUN luarocks install bit32
 RUN luarocks install http
 RUN luarocks install redis-lua
+
+USER kong

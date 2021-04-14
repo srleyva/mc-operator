@@ -28,6 +28,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +45,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -210,6 +212,8 @@ func StartServer(k8sClient client.Client) error {
 	g.PUT("/worlds/:name", handler.NewWorld)
 	g.GET("/worlds/:name", handler.GetWorld)
 	g.DELETE("/worlds/:name", handler.DeleteWorld)
+	g.PUT("/worlds/:name/:size", handler.ScaleWorld)
+
 	g.GET("/worlds", handler.GetWorlds)
 
 	data, err := json.MarshalIndent(e.Routes(), "", "  ")
@@ -245,6 +249,39 @@ type ListWorldResp struct {
 func Routes(k8sClient client.Client, logger *uberzap.Logger) *Handler {
 	handler := Handler{k8sClient, logger}
 	return &handler
+}
+
+func (h *Handler) ScaleWorld(c echo.Context) error {
+	name := c.Param("name")
+	size, err := strconv.ParseInt(c.Param("size"), 10, 32)
+	if err != nil {
+		h.logger.Error("err parsing param", uberzap.Error(err))
+		return echo.ErrInternalServerError
+	}
+
+	deployment := appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: name,
+		},
+	}
+
+	if err := h.k8sClient.Get(context.Background(), types.NamespacedName{Name: name, Namespace: name}, &deployment); err != nil {
+		if k8serrors.IsNotFound(err) {
+			return echo.ErrNotFound
+		}
+	}
+
+	replicas := int32(size)
+	patch := client.MergeFrom(deployment.DeepCopy())
+	deployment.Spec.Replicas = &replicas
+
+	if err := h.k8sClient.Patch(context.Background(), &deployment, patch); err != nil {
+		h.logger.Error("err patching deployment", uberzap.Error(err))
+		return echo.ErrInternalServerError
+	}
+
+	return c.JSON(http.StatusOK, map[string]interface{}{"scaled": replicas})
 }
 
 func (h *Handler) GetWorlds(c echo.Context) error {
