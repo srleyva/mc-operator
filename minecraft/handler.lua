@@ -40,7 +40,7 @@ local function add_connection(name)
         local result, status, _, _ = http.request{
             url=string.format("http://mc-operator-minecraft-control-plane-inner.mc-operator-system.svc.cluster.local/v1/worlds/%s/1", name),
             headers=headers,
-            method="POST",
+            method="PUT",
         }
         assert(status == 200, "status not ok")
     end
@@ -49,11 +49,12 @@ end
 local function remove_connection(name)
     local count = client:decr(name)
     kong.log(string.format("current connected: %d", count))
-    if count == 0 then
+    if count <= 0 then
+        local count = client:set(name, 0)
         -- prevent thrashing, sleep for 5 mins, check connections and then kill the world
         kong.log(string.format("No connections sleeping and then shutting down if no connections remain", count))
         os.execute("sleep " .. tonumber(300))
-        if client:get(name) == 0 then
+        if client:get(name) <= 0 then
             kong.info(string.format("None connected: shutting down: %s", name))
             local headers = { 
                 Authorization="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.MdtOSGktuwpjR8KcOkwbw0IkSPe1JuQadcZAhGie4m0"
@@ -61,7 +62,7 @@ local function remove_connection(name)
             local result, status, _, _ = http.request{
                 url=string.format("http://mc-operator-minecraft-control-plane-inner.mc-operator-system.svc.cluster.local/v1/worlds/%s/0", name),
                 headers=headers,
-                method="POST",
+                method="PUT",
             }
             assert(status == 200, "status not ok")
         end
