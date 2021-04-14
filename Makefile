@@ -137,8 +137,14 @@ bundle: manifests kustomize
 bundle-build:
 	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
+bootstrap: redis kong lua_plugin
+
+redis:
+	helm install redis bitnami/redis --set usePassword=false
+
 kong:
-	helm upgrade --install minecraft-lb kong/kong -f kong.yaml
+	helm install minecraft-lb kong/kong -f kong.yaml
+	kubectl apply -f kong-plugin.yaml
 	
 set_range:
 	kubectl patch deploy minecraft-lb-kong --patch "$(shell python3 build_patch.py generate_ports)"
