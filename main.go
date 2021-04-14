@@ -27,12 +27,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
-
-	"net/http"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/labstack/echo/v4"
@@ -285,71 +283,23 @@ func (h *Handler) ScaleWorld(c echo.Context) error {
 }
 
 func (h *Handler) GetWorlds(c echo.Context) error {
-	name := c.Param("name")
-	req := WorldRequest{name}
-
-	mcWorld := minecraftv1alpha1.World{
+	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name,
+			Name:      "minecraft-lb-kong-proxy",
 			Namespace: "default",
 		},
 	}
 
-	if err := h.k8sClient.Get(context.Background(), types.NamespacedName{Name: mcWorld.Name, Namespace: mcWorld.Namespace}, &mcWorld); err != nil {
+	if err := h.k8sClient.Get(context.Background(), types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, service); err != nil {
 		if k8serrors.IsNotFound(err) {
 			return echo.ErrNotFound
 		}
 	}
 
-	obj := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "configuration.konghq.com/v1beta1",
-			"kind":       "TCPIngress",
-			"metadata": map[string]interface{}{
-				"name":      fmt.Sprintf("%s-tcp-ingress", mcWorld.Name),
-				"namespace": mcWorld.Namespace,
-			},
-		},
-	}
+	response := map[int32]corev1.ServicePort{}
 
-	gkv := obj.GroupVersionKind()
-	mapping, err := h.k8sClient.RESTMapper().RESTMapping(gkv.GroupKind(), gkv.Version)
-	if err != nil {
-		return err
-	}
-
-	cfg, err := config.GetConfig()
-	if err != nil {
-		return err
-	}
-
-	// 2. Prepare the dynamic client
-	dyn, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		return err
-	}
-
-	var dr dynamic.ResourceInterface
-	if mapping.Scope.Name() == meta.RESTScopeNameNamespace {
-		// namespaced resources should specify the namespace
-		dr = dyn.Resource(mapping.Resource).Namespace(obj.GetNamespace())
-	} else {
-		// for cluster-wide resources
-		dr = dyn.Resource(mapping.Resource)
-	}
-
-	list, err := dr.List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		h.logger.Error("err getting Minecraft Ingress", uberzap.Error(err))
-		return echo.ErrInternalServerError
-	}
-
-	response := []ListWorldResp{}
-	for _, tcpIngress := range list.Items {
-		port := tcpIngress.Object["spec"].(map[string]interface{})["rules"].([]interface{})[0].(map[string]interface{})["port"].(int64)
-		name := tcpIngress.Object["spec"].(map[string]interface{})["rules"].([]interface{})[0].(map[string]interface{})["backend"].(map[string]interface{})["serviceName"].(string)
-		name = strings.ReplaceAll(name, "-server", "")
-		response = append(response, ListWorldResp{Name: name, Port: port})
+	for _, port := range service.Spec.Ports {
+		response[port.Port] = corev1.ServicePort{Name: port.Name, Port: port.Port}
 	}
 
 	return c.JSON(http.StatusOK, &response)
