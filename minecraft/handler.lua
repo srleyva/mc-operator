@@ -42,7 +42,6 @@ local function add_connection(name)
             method="PUT",
         }
         assert(status == 200, "status not ok")
-        os.execute("sleep " .. tonumber(25)) --hold socket while world comes up
     end
 end
 

@@ -343,6 +343,7 @@ func (r *WorldReconciler) ingressForMinecraft(m *minecraftv1alpha1.World, ctx co
 				"namespace": m.Name,
 				"annotations": map[string]interface{}{
 					"kubernetes.io/ingress.class": "kong",
+					"konghq.com/plugins":          "minecraft",
 				},
 			},
 			"spec": map[string]interface{}{
