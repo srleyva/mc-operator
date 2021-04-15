@@ -343,7 +343,6 @@ func (r *WorldReconciler) ingressForMinecraft(m *minecraftv1alpha1.World, ctx co
 				"namespace": m.Name,
 				"annotations": map[string]interface{}{
 					"kubernetes.io/ingress.class": "kong",
-					"konghq.com/plugins":          "minecraft",
 				},
 			},
 			"spec": map[string]interface{}{
@@ -358,6 +357,10 @@ func (r *WorldReconciler) ingressForMinecraft(m *minecraftv1alpha1.World, ctx co
 				},
 			},
 		},
+	}
+
+	if m.Spec.ColdStart {
+		obj.Object["metadata"].(map[string]interface{})["annotations"].(map[string]interface{})["konghq.com/plugins"] = "minecraft"
 	}
 
 	gkv := obj.GroupVersionKind()
@@ -467,6 +470,17 @@ func (r *WorldReconciler) serviceForMinecraft(m *minecraftv1alpha1.World) *corev
 
 // deploymentForMemcached returns a memcached Deployment object
 func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, configmap *corev1.ConfigMap, volume *corev1.PersistentVolumeClaim) *appsv1.Deployment {
+
+	var limit int
+	switch playerCount := (m.Spec.ServerProperties.MaxPlayers); {
+	case playerCount <= 10:
+		limit = 4096 // 4GB
+	case playerCount <= 20:
+		limit = 8192 // 8GB
+	default:
+		limit = 14336 // 14GB
+	}
+
 	ls := labelsForMinecraft(m.Name)
 	replicas := int32(1) // Can't load balance mc server
 	dep := &appsv1.Deployment{
@@ -489,7 +503,7 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 						ImagePullPolicy: corev1.PullAlways,
 						Command: []string{
 							"java",
-							"-Xmx1584M",
+							fmt.Sprintf("-Xmx%dM", limit),
 							"-Xms512M",
 							"-jar",
 							"server.jar",
@@ -501,7 +515,7 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 						Name: "minecraft",
 						Resources: corev1.ResourceRequirements{
 							Limits: corev1.ResourceList{
-								"memory": resource.MustParse("1584Mi"),
+								"memory": resource.MustParse(fmt.Sprintf("%dMi", limit)),
 							},
 							Requests: corev1.ResourceList{
 								"memory": resource.MustParse("512Mi"),

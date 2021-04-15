@@ -145,7 +145,14 @@ redis:
 kong:
 	helm install minecraft-lb kong/kong -f kong.yaml
 	kubectl apply -f kong-plugin.yaml
-	
+
+prometheus:
+	helm install prometheus prometheus-community/kube-prometheus-stack
+
+konga:
+	kubectl port-forward deploy/minecraft-lb-kong 8444 &	
+	docker run --name konga -p 8080:8080  -e PORT=8080 -e NODE_TLS_REJECT_UNAUTHORIZED="0" --rm --net=host pantsel/konga
+
 set_range:
 	kubectl patch deploy minecraft-lb-kong --patch "$(shell python3 build_patch.py generate_ports)"
 

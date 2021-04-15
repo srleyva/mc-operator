@@ -25,6 +25,7 @@ type WorldSpec struct {
 	ServerProperties *ServerProperties `json:"serverProperties"`
 	Version          string            `json:"version"`
 	Name             string            `json:"name"`
+	ColdStart        bool              `json:"cold_start"`
 }
 
 // ServerProperties is the actual server properties

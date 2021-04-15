@@ -38,6 +38,9 @@ spec:
             properties:
               name:
                 type: string
+              cold_start:
+                type: boolean
+                default: false
               serverProperties:
                 description: ServerProperties is the actual server properties
                 properties:

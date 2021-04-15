@@ -236,7 +236,9 @@ type Handler struct {
 }
 
 type WorldRequest struct {
-	Name string
+	Name             string                             `json:"-"`
+	ColdStart        bool                               `json:"coldStart,omitempty"`
+	ServerProperties minecraftv1alpha1.ServerProperties `json:"serverProperties,omitempty"`
 }
 
 type WorldResponse struct {
@@ -332,11 +334,10 @@ func (h *Handler) GetWorlds(c echo.Context) error {
 
 func (h *Handler) GetWorld(c echo.Context) error {
 	name := c.Param("name")
-	req := WorldRequest{name}
 
 	mcWorld := minecraftv1alpha1.World{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name,
+			Name:      name,
 			Namespace: "default",
 		},
 	}
@@ -350,7 +351,7 @@ func (h *Handler) GetWorld(c echo.Context) error {
 
 	namespace := corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: req.Name,
+			Name: name,
 		},
 	}
 
@@ -420,11 +421,10 @@ func (h *Handler) GetWorld(c echo.Context) error {
 
 func (h *Handler) DeleteWorld(c echo.Context) error {
 	name := c.Param("name")
-	req := WorldRequest{name}
 
 	world := minecraftv1alpha1.World{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      req.Name,
+			Name:      name,
 			Namespace: "default",
 		},
 	}
@@ -438,10 +438,9 @@ func (h *Handler) DeleteWorld(c echo.Context) error {
 
 func (h *Handler) NewWorld(c echo.Context) error {
 	name := c.Param("name")
-	req := WorldRequest{name}
+	req := WorldRequest{Name: name}
 
-	serverProperties := new(minecraftv1alpha1.ServerProperties)
-	if err := c.Bind(serverProperties); err != nil {
+	if err := c.Bind(&req); err != nil {
 		return err
 	}
 
@@ -451,8 +450,8 @@ func (h *Handler) NewWorld(c echo.Context) error {
 			Namespace: "default",
 		},
 		Spec: minecraftv1alpha1.WorldSpec{
-			Version:          "1.16",
-			ServerProperties: serverProperties,
+			ColdStart:        req.ColdStart,
+			ServerProperties: &req.ServerProperties,
 		},
 	}
 
