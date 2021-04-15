@@ -1,6 +1,5 @@
 local redis = require 'redis'
 local http = require "socket.http"
-local socket = require "socket"
 local json = require 'JSON'
 
 local params = {
@@ -42,8 +41,12 @@ local function add_connection(name)
             headers=headers,
             method="PUT",
         }
+        if status == 208 then -- World already scaled
+            return
+        end
+
         assert(status == 200, "status not ok")
-        socket.sleep(30)
+        ngx.sleep(30)
     end
 end
 

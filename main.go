@@ -279,6 +279,10 @@ func (h *Handler) ScaleWorld(c echo.Context) error {
 		}
 	}
 
+	if int32(size) == *deployment.Spec.Replicas {
+		return c.JSON(http.StatusAlreadyReported, map[string]string{"message": "world already scaled"})
+	}
+
 	go func() {
 
 		replicas := int32(size)
