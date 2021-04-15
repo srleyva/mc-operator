@@ -1,5 +1,6 @@
 local redis = require 'redis'
 local http = require "socket.http"
+local socket = require "socket"
 local json = require 'JSON'
 
 local params = {
@@ -42,6 +43,7 @@ local function add_connection(name)
             method="PUT",
         }
         assert(status == 200, "status not ok")
+        socket.sleep(30)
     end
 end
 

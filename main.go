@@ -237,6 +237,7 @@ type Handler struct {
 
 type WorldRequest struct {
 	Name             string                             `json:"-"`
+	Version          string                             `json:"version,omitempty"`
 	ColdStart        bool                               `json:"coldStart,omitempty"`
 	ServerProperties minecraftv1alpha1.ServerProperties `json:"serverProperties,omitempty"`
 }
@@ -444,12 +445,17 @@ func (h *Handler) NewWorld(c echo.Context) error {
 		return err
 	}
 
+	if req.Version == "" {
+		req.Version = "1.16"
+	}
+
 	mcWorld := minecraftv1alpha1.World{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
 			Namespace: "default",
 		},
 		Spec: minecraftv1alpha1.WorldSpec{
+			Version:          req.Version,
 			ColdStart:        req.ColdStart,
 			ServerProperties: &req.ServerProperties,
 		},

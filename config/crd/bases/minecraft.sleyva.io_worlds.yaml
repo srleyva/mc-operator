@@ -201,6 +201,7 @@ spec:
                 default: "1.16"
             required:
             - name
+            - version
             - serverProperties
             type: object
           status:
