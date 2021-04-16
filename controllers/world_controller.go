@@ -490,6 +490,9 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
+			Strategy: appsv1.DeploymentStrategy{
+				Type: appsv1.RecreateDeploymentStrategyType,
+			},
 			Selector: &metav1.LabelSelector{
 				MatchLabels: ls,
 			},
