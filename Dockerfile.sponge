@@ -1,0 +1,20 @@
+FROM  openjdk:14-jdk-alpine
+
+WORKDIR /game
+
+RUN apk add curl && \
+    curl https://repo.spongepowered.org/maven/org/spongepowered/spongeforge/1.12.2-2838-7.3.0/spongeforge-1.12.2-2838-7.3.0.jar -o sponge.jar && \
+    curl https://files.minecraftforge.net/maven/net/minecraftforge/forge/1.16.5-36.1.4/forge-1.16.5-36.1.4-installer.jar -o forge.jar
+
+
+RUN java -jar forge.jar --installServer --extract /game
+
+RUN echo "eula=true" > eula.txt
+
+RUN java -jar forge-1.16.5-36.1.4.jar --initSettings
+
+RUN mv sponge.jar mods
+
+RUN mv forge-1.16.5-36.1.4.jar server.jar
+
+ENTRYPOINT [ "java", "-jar", "/game/forge-1.16.5-36.1.4.jar", "--help"]
