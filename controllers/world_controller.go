@@ -492,7 +492,7 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Image:           fmt.Sprintf("sleyva97/paper-server:%s-alpine", m.Spec.Version),
+						Image:           fmt.Sprintf("sleyva97/%s-server:%s-alpine", m.Spec.ServerType, m.Spec.Version),
 						ImagePullPolicy: corev1.PullAlways,
 						Command: []string{
 							"java",
@@ -500,10 +500,7 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 							"-Xms512M",
 							"-jar",
 							"server.jar",
-							"--nogui",
-							"--noconsole",
-							"-W", "/worlds/",
-							"-c", "/etc/server.properties",
+							"--universe", "/worlds/",
 						},
 						Name: "minecraft",
 						Resources: corev1.ResourceRequirements{
@@ -535,7 +532,7 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 							},
 							{
 								Name:      "server-properties",
-								MountPath: "/etc/server.properties",
+								MountPath: "/game/server.properties",
 								SubPath:   "server.properties",
 							},
 						},

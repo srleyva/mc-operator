@@ -36,6 +36,10 @@ spec:
           spec:
             description: WorldSpec defines the desired state of World
             properties:
+              serverType:
+                type: string
+                default: "paper"
+                pattern: '(paper|sponge|vanilla)'
               port:
                 type: integer
               cold_start:
@@ -107,7 +111,6 @@ spec:
                   levelType:
                     type: string
                     default: "default"
-                    pattern: '(default|flat|largeBiomes|amplified|buffet|default_1_1|customized)'
                   maxBuildHeight:
                     type: integer
                     default: 256

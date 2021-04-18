@@ -99,7 +99,7 @@ local function get_mapping(port)
         assert(status == 200, "status not ok")
         local mapping = json:decode(resp[1])
         name = mapping[string.format("%s", port)].name
-        kong.log(string.format("Port %d -> %s", port, name))
+        kong.log.debug(string.format("Port %d -> %s", port, name))
         client:set(port, name)
     end
     return name
@@ -123,6 +123,7 @@ local function add_connection(name)
         end
 
         kong.log.debug("scaled")
+        ngx.sleep(30)
         assert(status == 200, "status not ok")
     end
 end

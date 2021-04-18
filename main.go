@@ -238,6 +238,7 @@ type WorldRequest struct {
 	Name             string                             `json:"-"`
 	Version          string                             `json:"version,omitempty"`
 	ColdStart        bool                               `json:"coldStart,omitempty"`
+	ServerType       string                             `json:"serverType,omitempty"`
 	ServerProperties minecraftv1alpha1.ServerProperties `json:"serverProperties,omitempty"`
 }
 
@@ -283,7 +284,6 @@ func (h *Handler) ScaleWorld(c echo.Context) error {
 	}
 
 	go func() {
-
 		replicas := int32(size)
 		if replicas == 0 {
 			time.Sleep(5 * time.Minute)
@@ -294,10 +294,10 @@ func (h *Handler) ScaleWorld(c echo.Context) error {
 				return
 			}
 			if conn > 0 {
-				h.logger.Info("Redis connections shutdown aborted")
+				h.logger.Info("Redis connections shutdown aborted", uberzap.String("World", name))
 				return
 			}
-			h.logger.Info("No redis connection proceeding with shutdown")
+			h.logger.Info("No redis connection proceeding with shutdown", uberzap.String("World", name))
 		}
 
 		patch := client.MergeFrom(deployment.DeepCopy())
@@ -452,6 +452,10 @@ func (h *Handler) NewWorld(c echo.Context) error {
 		req.Version = "1.16"
 	}
 
+	if req.ServerType == "" {
+		req.ServerType = "paper"
+	}
+
 	// Get port
 	port, err := h.ports.RandPort()
 	if err != nil {
@@ -466,6 +470,7 @@ func (h *Handler) NewWorld(c echo.Context) error {
 		Spec: minecraftv1alpha1.WorldSpec{
 			Version:          req.Version,
 			ColdStart:        req.ColdStart,
+			ServerType:       req.ServerType,
 			ServerProperties: &req.ServerProperties,
 			Port:             port,
 		},

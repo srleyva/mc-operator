@@ -23,8 +23,9 @@ import (
 // WorldSpec defines the desired state of World
 type WorldSpec struct {
 	ServerProperties *ServerProperties `json:"serverProperties"`
+	ServerType       string            `json:"serverType"`
 	Version          string            `json:"version"`
-	ColdStart        bool              `json:"cold_start"`
+	ColdStart        bool              `json:"coldStart"`
 	Port             int32             `json:"port"`
 }
 
