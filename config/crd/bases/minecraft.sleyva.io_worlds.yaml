@@ -36,8 +36,8 @@ spec:
           spec:
             description: WorldSpec defines the desired state of World
             properties:
-              name:
-                type: string
+              port:
+                type: integer
               cold_start:
                 type: boolean
                 default: false
@@ -200,9 +200,9 @@ spec:
                 type: string
                 default: "1.16"
             required:
-            - name
             - version
             - serverProperties
+            - port
             type: object
           status:
             description: WorldStatus defines the observed state of World

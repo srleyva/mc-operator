@@ -2,6 +2,7 @@ local redis = require 'redis'
 local http = require "socket.http"
 local json = require 'JSON'
 local bit32 = require 'bit32'
+local ltn12 = require "ltn12"
 
 local params = {
     host = 'redis-master.default.svc.cluster.local',
@@ -85,6 +86,7 @@ end
 local function get_mapping(port)
     local name = client:get(string.format("%d", port))
     if name == nil then
+        local resp = {}
         local headers = { 
             Authorization="Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.MdtOSGktuwpjR8KcOkwbw0IkSPe1JuQadcZAhGie4m0"
         }
@@ -92,10 +94,12 @@ local function get_mapping(port)
             url="http://mc-operator-minecraft-control-plane-inner.mc-operator-system.svc.cluster.local/v1/worlds",
             headers=headers,
             method="GET",
+            sink=ltn12.sink.table(resp)
         }
         assert(status == 200, "status not ok")
-        local mapping = json.decode(result)
-        name = mapping.name
+        local mapping = json:decode(resp[1])
+        name = mapping[string.format("%s", port)].name
+        kong.log(string.format("Port %d -> %s", port, name))
         client:set(port, name)
     end
     return name
@@ -114,11 +118,12 @@ local function add_connection(name)
             method="PUT",
         }
         if status == 208 then -- World already scaled
+            kong.log.debug("already scaled")
             return
         end
 
+        kong.log.debug("scaled")
         assert(status == 200, "status not ok")
-        ngx.sleep(30)
     end
 end
 

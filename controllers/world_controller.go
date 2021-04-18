@@ -19,9 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"sync"
-
-	"math/rand"
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/common/log"
@@ -49,7 +46,6 @@ type WorldReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
-	Ports  *Ports
 }
 
 // +kubebuilder:rbac:groups=minecraft.sleyva.io,resources=worlds,verbs=get;list;watch;create;update;patch;delete
@@ -317,15 +313,9 @@ func (r *WorldReconciler) ingressForMinecraft(m *minecraftv1alpha1.World, ctx co
 		}
 	}
 
-	// Get port
-	port, err := r.Ports.RandPort()
-	if err != nil {
-		return err
-	}
-
 	// Open port on service
 	servicePatch := client.MergeFrom(service.DeepCopy())
-	service.Spec.Ports = append(service.Spec.Ports, corev1.ServicePort{Name: m.Name, Port: port, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(int(port))})
+	service.Spec.Ports = append(service.Spec.Ports, corev1.ServicePort{Name: m.Name, Port: m.Spec.Port, Protocol: corev1.ProtocolTCP, TargetPort: intstr.FromInt(int(m.Spec.Port))})
 	r.Log.Info("Opening Service", "World", m.Name)
 	if err := r.Patch(ctx, service, servicePatch); err != nil {
 		if !errors.IsInvalid(err) {
@@ -348,10 +338,10 @@ func (r *WorldReconciler) ingressForMinecraft(m *minecraftv1alpha1.World, ctx co
 			"spec": map[string]interface{}{
 				"rules": []map[string]interface{}{
 					{
-						"port": port,
+						"port": m.Spec.Port,
 						"backend": map[string]interface{}{
 							"serviceName": fmt.Sprintf("%s-server", m.Name),
-							"servicePort": m.Spec.ServerProperties.ServerPort,
+							"servicePort": 8080,
 						},
 					},
 				},
@@ -460,7 +450,7 @@ func (r *WorldReconciler) serviceForMinecraft(m *minecraftv1alpha1.World) *corev
 				{
 					Name:       "server",
 					Protocol:   corev1.ProtocolTCP,
-					Port:       int32(m.Spec.ServerProperties.ServerPort),
+					Port:       int32(8080),
 					TargetPort: intstr.IntOrString{Type: intstr.String, StrVal: "minecraft"},
 				},
 			},
@@ -526,7 +516,7 @@ func (r *WorldReconciler) deploymentForMinecraft(m *minecraftv1alpha1.World, con
 						},
 						Ports: []corev1.ContainerPort{
 							{
-								ContainerPort: int32(m.Spec.ServerProperties.ServerPort),
+								ContainerPort: int32(8080),
 								Name:          "minecraft",
 							},
 							{
@@ -616,7 +606,7 @@ view-distance=%d
 max-build-height=%d
 server-ip=%s
 allow-nether=%t
-server-port=%d
+server-port=8080
 enable-rcon=%t
 sync-chunk-writes=%t
 op-permission-level=%d
@@ -666,7 +656,6 @@ max-world-size=%d
 				m.MaxBuildHeight,
 				m.ServerIP,
 				m.AllowNether,
-				m.ServerPort,
 				m.EnableRCON,
 				m.SyncChunkWrites,
 				m.OpPermissionLevel,
@@ -716,52 +705,4 @@ func (r *WorldReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&minecraftv1alpha1.World{}).
 		Owns(&appsv1.Deployment{}).
 		Complete(r)
-}
-
-type portInner map[int32]bool
-
-type Ports struct {
-	inner map[int32]bool
-	sync.RWMutex
-	min int32
-	max int32
-}
-
-func NewPorts(ports map[int32]bool, max int32, min int32) *Ports {
-	return &Ports{
-		inner: ports,
-		max:   max,
-		min:   min,
-	}
-}
-
-func (p *Ports) RandPort() (int32, error) {
-	port := rand.Int31n(p.max-p.min) + p.min
-	for p.Exists(port) {
-		port = rand.Int31n(p.max-p.min) + p.min
-	}
-	if err := p.NewPort(port); err != nil {
-		return 0, err
-	}
-
-	return port, nil
-}
-
-func (p *Ports) NewPort(port int32) error {
-	p.Lock()
-	defer p.Unlock()
-	if _, ok := p.inner[port]; ok {
-		return fmt.Errorf("Port already in use")
-	}
-	p.inner[port] = true
-	return nil
-}
-
-func (p *Ports) Exists(port int32) bool {
-	p.RLock()
-	defer p.RUnlock()
-	if _, ok := p.inner[port]; !ok {
-		return false
-	}
-	return true
 }

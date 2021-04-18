@@ -24,8 +24,8 @@ import (
 type WorldSpec struct {
 	ServerProperties *ServerProperties `json:"serverProperties"`
 	Version          string            `json:"version"`
-	Name             string            `json:"name"`
 	ColdStart        bool              `json:"cold_start"`
+	Port             int32             `json:"port"`
 }
 
 // ServerProperties is the actual server properties
@@ -55,7 +55,6 @@ type ServerProperties struct {
 	MaxBuildHeight                 int    `json:"maxBuildHeight,omitempty"`
 	ServerIP                       string `json:"serverIP,omitempty"`
 	AllowNether                    bool   `json:"allowNether,omitempty"`
-	ServerPort                     int    `json:"serverPort,omitempty"`
 	EnableRCON                     bool   `json:"enableRCON,omitempty"`
 	SyncChunkWrites                bool   `json:"syncChunkWrites,omitempty"`
 	OpPermissionLevel              int    `json:"opPermissionLevel,omitempty"`

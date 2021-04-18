@@ -27,9 +27,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -107,13 +109,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	ports_cache := controllers.NewPorts(make(map[int32]bool), 2025, 1025)
-
 	if err = (&controllers.WorldReconciler{
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("World"),
 		Scheme: mgr.GetScheme(),
-		Ports:  ports_cache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "World")
 		os.Exit(1)
@@ -122,7 +121,6 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("World"),
 		Scheme: mgr.GetScheme(),
-		Ports:  ports_cache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "World")
 		os.Exit(1)
@@ -131,7 +129,6 @@ func main() {
 		Client: mgr.GetClient(),
 		Log:    ctrl.Log.WithName("controllers").WithName("World"),
 		Scheme: mgr.GetScheme(),
-		Ports:  ports_cache,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "World")
 		os.Exit(1)
@@ -148,28 +145,6 @@ func main() {
 	}
 
 	go func() {
-		setupLog.Info("Setting up port cache")
-		service := corev1.Service{ObjectMeta: metav1.ObjectMeta{
-			Name:      "minecraft-lb-kong-proxy",
-			Namespace: "default",
-		}}
-		for true {
-			if err := mgr.GetClient().Get(context.Background(), types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, &service); err != nil {
-				setupLog.Error(err, "error creating port cache")
-				time.Sleep(3 * time.Second)
-				continue
-			}
-			setupLog.Info("Found Service!")
-			break
-		}
-
-		for _, port := range service.Spec.Ports {
-			if err := ports_cache.NewPort(port.Port); err != nil {
-				setupLog.Error(err, "Error writing to port cache")
-			}
-		}
-		setupLog.Info("Created port cache", "cache", fmt.Sprintf("%v", ports_cache))
-
 		if err := StartServer(mgr.GetClient()); err != nil {
 			setupLog.Error(err, "Server shutdown")
 		}
@@ -210,8 +185,31 @@ func StartServer(k8sClient client.Client) error {
 		return err
 	}
 
+	ports_cache := NewPorts(make(map[int32]bool), 2025, 1025)
+	setupLog.Info("Setting up port cache")
+	service := corev1.Service{ObjectMeta: metav1.ObjectMeta{
+		Name:      "minecraft-lb-kong-proxy",
+		Namespace: "default",
+	}}
+	for true {
+		if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, &service); err != nil {
+			setupLog.Error(err, "error creating port cache")
+			time.Sleep(3 * time.Second)
+			continue
+		}
+		setupLog.Info("Found Service!")
+		break
+	}
+
+	for _, port := range service.Spec.Ports {
+		if err := ports_cache.NewPort(port.Port); err != nil {
+			setupLog.Error(err, "Error writing to port cache")
+		}
+	}
+	setupLog.Info("Created port cache", "cache", fmt.Sprintf("%v", ports_cache))
+
 	g := e.Group("/v1")
-	handler := Routes(k8sClient, logger, client)
+	handler := Routes(k8sClient, logger, client, ports_cache)
 	g.PUT("/worlds/:name", handler.NewWorld)
 	g.GET("/worlds/:name", handler.GetWorld)
 	g.DELETE("/worlds/:name", handler.DeleteWorld)
@@ -233,6 +231,7 @@ type Handler struct {
 	k8sClient client.Client
 	logger    *uberzap.Logger
 	redis     radix.Client
+	ports     *Ports
 }
 
 type WorldRequest struct {
@@ -253,8 +252,8 @@ type ListWorldResp struct {
 	Port int64  `json:"port"`
 }
 
-func Routes(k8sClient client.Client, logger *uberzap.Logger, client radix.Client) *Handler {
-	handler := Handler{k8sClient, logger, client}
+func Routes(k8sClient client.Client, logger *uberzap.Logger, client radix.Client, ports *Ports) *Handler {
+	handler := Handler{k8sClient, logger, client, ports}
 	return &handler
 }
 
@@ -453,6 +452,12 @@ func (h *Handler) NewWorld(c echo.Context) error {
 		req.Version = "1.16"
 	}
 
+	// Get port
+	port, err := h.ports.RandPort()
+	if err != nil {
+		return err
+	}
+
 	mcWorld := minecraftv1alpha1.World{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      req.Name,
@@ -462,6 +467,7 @@ func (h *Handler) NewWorld(c echo.Context) error {
 			Version:          req.Version,
 			ColdStart:        req.ColdStart,
 			ServerProperties: &req.ServerProperties,
+			Port:             port,
 		},
 	}
 
@@ -482,4 +488,52 @@ func (h *Handler) NewWorld(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, map[string]string{"message": fmt.Sprintf("World %s Created", mcWorld.Name)})
 
+}
+
+type portInner map[int32]bool
+
+type Ports struct {
+	inner map[int32]bool
+	sync.RWMutex
+	min int32
+	max int32
+}
+
+func NewPorts(ports map[int32]bool, max int32, min int32) *Ports {
+	return &Ports{
+		inner: ports,
+		max:   max,
+		min:   min,
+	}
+}
+
+func (p *Ports) RandPort() (int32, error) {
+	port := rand.Int31n(p.max-p.min) + p.min
+	for p.Exists(port) {
+		port = rand.Int31n(p.max-p.min) + p.min
+	}
+	if err := p.NewPort(port); err != nil {
+		return 0, err
+	}
+
+	return port, nil
+}
+
+func (p *Ports) NewPort(port int32) error {
+	p.Lock()
+	defer p.Unlock()
+	if _, ok := p.inner[port]; ok {
+		return fmt.Errorf("Port already in use")
+	}
+	p.inner[port] = true
+	return nil
+}
+
+func (p *Ports) Exists(port int32) bool {
+	p.RLock()
+	defer p.RUnlock()
+	if _, ok := p.inner[port]; !ok {
+		return false
+	}
+	return true
 }
